@@ -62,7 +62,7 @@
   #attendanceView .scan-checkmark svg{width:64px;height:64px;}
   #attendanceView .scan-start-overlay{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(11,26,38,0.82);color:#fff;}
   #attendanceView .scan-start-overlay p{margin:0;font-size:13px;line-height:1.5;color:#D7E3EC;}
-  #attendanceView .scan-start-btn{background:var(--flame);color:#fff;border:none;padding:13px 26px;border-radius:30px;font-family:var(--font-display);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;cursor:pointer;font-size:16px;}
+  #attendanceView .scan-start-btn{background:var(--flame);color:#fff;border:none;padding:13px 26px;border-radius:30px;font-family:var(--font-display);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;cursor:pointer;font-size:14px;}
   #attendanceView .camera-error{background:#FFF4EC;border:1px solid #FFD7B8;color:#7A3B12;font-size:13px;line-height:1.5;border-radius:10px;padding:12px 14px;}
   #attendanceView .manual-fallback{margin-top:12px;}
   #attendanceView .manual-fallback input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:var(--font-mono);font-size:14px;}
@@ -89,7 +89,7 @@
   #attendanceView .result-msg.err{background:#FDECEA;color:#9A2A1A;border:1px solid #F6C6BD;}
   #attendanceView .scan-next-btn{margin-top:12px;width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;background:#fff;color:var(--navy);font-weight:600;font-family:var(--font-body);cursor:pointer;}
   #attendanceView table{width:100%;border-collapse:collapse;font-size:13px;}
-  #attendanceView thead th{text-align:left;font-family:var(--font-body);font-weight:600;color:var(--text-muted);text-transform:uppercase;font-size:11px;letter-spacing:0.5px;padding:6px 4px;border-bottom:1px solid var(--border);}
+  #attendanceView thead th{text-align:left;font-family:var(--font-body);font-weight:600;color:var(--text-muted);text-transform:uppercase;font-size:11px;letter-spacing:0.5px;padding:6px 4px;border-bottom:2px solid var(--border);}
   #attendanceView tbody td{padding:9px 4px;border-bottom:1px solid #F0F2F4;font-family:var(--font-mono);}
   #attendanceView tbody td.name-cell{font-family:var(--font-body);font-weight:500;}
   #attendanceView .pill{display:inline-block;font-family:var(--font-body);font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;}
@@ -326,7 +326,7 @@ async function apiPost(payload){
 /* Camera + QR */
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d',{willReadFrequently:true});
+const ctx = canvas.getContext('2d');
 const scanRing = document.getElementById('scanRing');
 const scanHint = document.getElementById('scanHint');
 const scanCheckmark = document.getElementById('scanCheckmark');
@@ -339,7 +339,7 @@ let scanInterval = null;
 let torchOn = false;
 let torchTrack = null;
 let lastScannedTime = 0;
-const SCAN_THROTTLE = 100; // Reduced from 300ms for faster scanning
+const SCAN_THROTTLE = 100;
 
 function showCameraError(msg){ cameraErrorText.textContent=msg; cameraError.classList.remove('hidden'); }
 
@@ -366,9 +366,15 @@ async function startCamera(){
     stream = await navigator.mediaDevices.getUserMedia(constraints);
     video.srcObject = stream;
     
-    video.onloadedmetadata = () => {
-      video.play().catch(e => console.log('Play failed:', e));
-    };
+    // Wait for video to be ready before starting scan loop
+    await new Promise((resolve) => {
+      video.onloadedmetadata = () => {
+        video.play().then(resolve).catch(e => {
+          console.error('Play error:', e);
+          resolve(); // Continue anyway
+        });
+      };
+    });
 
     torchTrack = stream.getVideoTracks()[0];
 
@@ -389,7 +395,7 @@ async function startCamera(){
     scanning = true;
     lastScannedTime = 0;
 
-    // Faster scanning loop - 30fps
+    // Start scanning loop
     scanInterval = setInterval(tick, 33);
   }catch(err){
     let msg="Couldn't access the camera. ";
@@ -402,42 +408,25 @@ async function startCamera(){
 }
 
 function tick(){
-  if(!scanning) return;
+  if(!scanning || !video) return;
   if(video.readyState !== video.HAVE_ENOUGH_DATA) return;
 
   const vw = video.videoWidth  || 640;
   const vh = video.videoHeight || 640;
+  
+  if(vw < 10 || vh < 10) return; // Video not properly initialized
+
   canvas.width  = vw;
   canvas.height = vh;
 
-  // Fast primary attempt
   ctx.drawImage(video, 0, 0, vw, vh);
-  let code = tryDecode(vw, vh, 'attemptBoth');
-  if(code){ handleScanResult(code); return; }
-
-  // Quick inversion attempt if primary fails
   const imageData = ctx.getImageData(0, 0, vw, vh);
-  invertImageData(imageData.data);
-  ctx.putImageData(imageData, 0, 0);
-  code = tryDecode(vw, vh, 'dontInvert');
-  if(code){ handleScanResult(code); }
-}
-
-function invertImageData(data) {
-  for(let i = 0; i < data.length; i += 4) {
-    data[i]     = 255 - data[i];
-    data[i + 1] = 255 - data[i + 1];
-    data[i + 2] = 255 - data[i + 2];
+  
+  // Try normal decode first
+  let code = jsQR(imageData.data, vw, vh, {inversionAttempts: 'attemptBoth'});
+  if(code && code.data) {
+    handleScanResult(code.data);
   }
-}
-
-function tryDecode(w, h, inversionMode){
-  try{
-    const imageData = ctx.getImageData(0, 0, w, h);
-    const result = jsQR(imageData.data, w, h, {inversionAttempts: inversionMode});
-    if(result && result.data) return result.data;
-  }catch(e){}
-  return null;
 }
 
 function handleScanResult(text){
