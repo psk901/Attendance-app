@@ -57,16 +57,16 @@
   @keyframes pulseRing{0%,100%{box-shadow:0 0 0 4px rgba(255,107,26,0.15);}50%{box-shadow:0 0 0 12px rgba(255,107,26,0.05);}}
   #attendanceView .scan-ring.success{border-color:var(--success);box-shadow:0 0 0 14px rgba(46,158,91,0.12);}
   #attendanceView .scan-ring.invalid{border-color:var(--flame-deep);}
-  #attendanceView .scan-hint{position:absolute;left:0;right:0;bottom:10px;text-align:center;font-size:12px;color:#fff;background:rgba(0,0,0,0.35);margin:0 auto;width:fit-content;padding:5px 12px;border-radius:20px;}
+  #attendanceView .scan-hint{position:absolute;left:0;right:0;bottom:10px;text-align:center;font-size:12px;color:#fff;background:rgba(0,0,0,0.35);margin:0 auto;width:fit-content;padding:5px 12px;border-radius:8px;}
   #attendanceView .scan-checkmark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;}
   #attendanceView .scan-checkmark svg{width:64px;height:64px;}
-  #attendanceView .scan-start-overlay{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(11,26,38,0.82);color:#f8fafc;}
+  #attendanceView .scan-start-overlay{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(11,26,38,0.82);color:#fff;}
   #attendanceView .scan-start-overlay p{margin:0;font-size:13px;line-height:1.5;color:#D7E3EC;}
   #attendanceView .scan-start-btn{background:var(--flame);color:#fff;border:none;padding:13px 26px;border-radius:30px;font-family:var(--font-display);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;cursor:pointer;font-size:16px;}
   #attendanceView .camera-error{background:#FFF4EC;border:1px solid #FFD7B8;color:#7A3B12;font-size:13px;line-height:1.5;border-radius:10px;padding:12px 14px;}
   #attendanceView .manual-fallback{margin-top:12px;}
   #attendanceView .manual-fallback input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:var(--font-mono);font-size:14px;}
-  #attendanceView .manual-fallback button{margin-top:8px;width:100%;padding:10px;border:none;border-radius:8px;background:var(--steel);color:#fff;font-family:var(--font-body);font-weight:600;font-size:14px;}
+  #attendanceView .manual-fallback button{margin-top:8px;width:100%;padding:10px;border:none;border-radius:8px;background:var(--steel);color:#fff;font-family:var(--font-body);font-weight:600;font-size:14px;cursor:pointer;}
 
   /* Name selector buttons */
   #attendanceView .name-btn-row{display:flex;gap:10px;margin-bottom:12px;}
@@ -79,7 +79,7 @@
   #attendanceView .name-btn.selected{border-color:var(--flame);background:var(--flame);color:#fff;}
 
   #attendanceView .status-line{font-size:13px;color:var(--text-muted);margin:8px 0 14px;font-family:var(--font-mono);}
-  #attendanceView .action-btn{width:100%;min-height:56px;border:none;border-radius:10px;font-family:var(--font-display);font-weight:600;font-size:17px;letter-spacing:0.5px;text-transform:uppercase;color:#fff;cursor:pointer;transition:0.2s;}
+  #attendanceView .action-btn{width:100%;min-height:56px;border:none;border-radius:10px;font-family:var(--font-display);font-weight:600;font-size:17px;letter-spacing:0.5px;text-transform:uppercase;color:#fff;cursor:pointer;}
   #attendanceView .action-btn.checkin{background:var(--flame);}
   #attendanceView .action-btn.checkout{background:var(--gas-blue);}
   #attendanceView .action-btn[disabled]{background:#C7CFD4;color:#fff;cursor:default;}
@@ -339,7 +339,7 @@ let scanInterval = null;
 let torchOn = false;
 let torchTrack = null;
 let lastScannedTime = 0;
-const SCAN_THROTTLE = 300; // Prevent double-scans within 300ms
+const SCAN_THROTTLE = 100; // Reduced from 300ms for faster scanning
 
 function showCameraError(msg){ cameraErrorText.textContent=msg; cameraError.classList.remove('hidden'); }
 
@@ -354,7 +354,6 @@ async function startCamera(){
     return;
   }
   try{
-    // Request environment-facing camera with best possible resolution
     const constraints = {
       video:{
         facingMode:'environment',
@@ -367,20 +366,17 @@ async function startCamera(){
     stream = await navigator.mediaDevices.getUserMedia(constraints);
     video.srcObject = stream;
     
-    // Wait for video to load before playing
     video.onloadedmetadata = () => {
       video.play().catch(e => console.log('Play failed:', e));
     };
 
-    // Store track for torch control
     torchTrack = stream.getVideoTracks()[0];
 
-    // Add torch button if supported
     const caps = torchTrack.getCapabilities ? torchTrack.getCapabilities() : {};
     if(caps.torch){
       const torchBtn = document.createElement('button');
       torchBtn.textContent = '🔦';
-      torchBtn.style.cssText = 'position:absolute;top:10px;right:10px;z-index:20;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:38px;height:38px;font-size:18px;cursor:pointer;transition:0.2s;';
+      torchBtn.style.cssText = 'position:absolute;top:10px;right:10px;z-index:20;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:38px;height:38px;font-size:18px;cursor:pointer;';
       torchBtn.onclick = async ()=>{
         torchOn = !torchOn;
         await torchTrack.applyConstraints({advanced:[{torch:torchOn}]});
@@ -393,8 +389,8 @@ async function startCamera(){
     scanning = true;
     lastScannedTime = 0;
 
-    // Scan at ~20fps for better detection
-    scanInterval = setInterval(tick, 50);
+    // Faster scanning loop - 30fps
+    scanInterval = setInterval(tick, 33);
   }catch(err){
     let msg="Couldn't access the camera. ";
     if(err.name==='NotAllowedError') msg+="Allow camera permission in browser settings, then reload.";
@@ -409,89 +405,42 @@ function tick(){
   if(!scanning) return;
   if(video.readyState !== video.HAVE_ENOUGH_DATA) return;
 
-  // Use actual video dimensions
   const vw = video.videoWidth  || 640;
   const vh = video.videoHeight || 640;
   canvas.width  = vw;
   canvas.height = vh;
 
-  // Multiple decode attempts with different processing
-  let code = null;
-  
-  // Try 1: raw frame
+  // Fast primary attempt
   ctx.drawImage(video, 0, 0, vw, vh);
-  code = tryDecode(vw, vh);
+  let code = tryDecode(vw, vh, 'attemptBoth');
   if(code){ handleScanResult(code); return; }
 
-  // Try 2: inverted (white QR on dark background)
+  // Quick inversion attempt if primary fails
   const imageData = ctx.getImageData(0, 0, vw, vh);
   invertImageData(imageData.data);
   ctx.putImageData(imageData, 0, 0);
-  code = tryDecode(vw, vh);
-  if(code){ handleScanResult(code); return; }
-
-  // Try 3: high contrast
-  ctx.drawImage(video, 0, 0, vw, vh);
-  ctx.filter = 'contrast(2) brightness(1.2)';
-  ctx.drawImage(video, 0, 0, vw, vh);
-  ctx.filter = 'none';
-  code = tryDecode(vw, vh);
-  if(code){ handleScanResult(code); return; }
-
-  // Try 4: grayscale with extreme contrast
-  ctx.filter = 'grayscale(1) contrast(3) brightness(1.1)';
-  ctx.drawImage(video, 0, 0, vw, vh);
-  ctx.filter = 'none';
-  code = tryDecode(vw, vh);
-  if(code){ handleScanResult(code); return; }
-
-  // Try 5: channel manipulation for edge detection
-  ctx.drawImage(video, 0, 0, vw, vh);
-  const data = ctx.getImageData(0, 0, vw, vh).data;
-  edgeEnhance(data);
-  ctx.putImageData(new ImageData(data, vw, vh), 0, 0);
-  code = tryDecode(vw, vh);
+  code = tryDecode(vw, vh, 'dontInvert');
   if(code){ handleScanResult(code); }
 }
 
 function invertImageData(data) {
   for(let i = 0; i < data.length; i += 4) {
-    data[i]     = 255 - data[i];     // R
-    data[i + 1] = 255 - data[i + 1]; // G
-    data[i + 2] = 255 - data[i + 2]; // B
-    // data[i + 3] stays as is (alpha)
+    data[i]     = 255 - data[i];
+    data[i + 1] = 255 - data[i + 1];
+    data[i + 2] = 255 - data[i + 2];
   }
 }
 
-function edgeEnhance(data) {
-  // Simple edge enhancement via channel adjustment
-  for(let i = 0; i < data.length; i += 4) {
-    const gray = (data[i] + data[i+1] + data[i+2]) / 3;
-    const threshold = 128;
-    data[i]     = gray > threshold ? 255 : 0;
-    data[i + 1] = gray > threshold ? 255 : 0;
-    data[i + 2] = gray > threshold ? 255 : 0;
-  }
-}
-
-function tryDecode(w, h){
+function tryDecode(w, h, inversionMode){
   try{
     const imageData = ctx.getImageData(0, 0, w, h);
-    // Try both inversion attempts
-    let result = jsQR(imageData.data, w, h, {inversionAttempts:'dontInvert'});
-    if(result && result.data) return result.data;
-    
-    result = jsQR(imageData.data, w, h, {inversionAttempts:'onlyInvert'});
-    if(result && result.data) return result.data;
-    
-    result = jsQR(imageData.data, w, h, {inversionAttempts:'attemptBoth'});
+    const result = jsQR(imageData.data, w, h, {inversionAttempts: inversionMode});
     if(result && result.data) return result.data;
   }catch(e){}
   return null;
 }
 
 function handleScanResult(text){
-  // Throttle to prevent multiple rapid scans
   const now = Date.now();
   if(now - lastScannedTime < SCAN_THROTTLE) return;
   lastScannedTime = now;
@@ -620,7 +569,7 @@ scanNextBtn.addEventListener('click',()=>{
   scanning = true;
   lastScannedTime = 0;
   if(scanInterval) clearInterval(scanInterval);
-  scanInterval = setInterval(tick, 50);
+  scanInterval = setInterval(tick, 33);
 });
 
 /* Today's log */
@@ -700,13 +649,11 @@ function calculate(){
   const officeEntryAmt=officeEntry*rate;
   document.getElementById('officeEntryAmount').textContent='₹'+officeEntryAmt.toLocaleString('en-IN');
 
-  // Sum other bills
   let otherBillsTotal=0;
   document.querySelectorAll('.obillAmount').forEach(inp=>{
     otherBillsTotal+=(parseFloat(inp.value)||0);
   });
 
-  // Expected from cylinder cash sales only
   const expected=cashOrders*rate;
   document.getElementById('expectedCash').textContent='₹'+expected.toLocaleString('en-IN');
   document.getElementById('expectedCash2').textContent='₹'+expected.toLocaleString('en-IN');
@@ -729,7 +676,6 @@ function calculate(){
   document.getElementById('grandTotalSummary').textContent='₹'+grandTotal.toLocaleString('en-IN');
   document.getElementById('onlineSummary').textContent='₹'+onlineCollected.toLocaleString('en-IN');
 
-  // Total expected = cylinder sales + office entry + other bills
   const totalExpected=expected+officeEntryAmt+otherBillsTotal;
   const diff=grandTotal-totalExpected;
   const diffEl=document.getElementById('diffValue');
@@ -766,7 +712,6 @@ function buildRowData(){
   const boys=[];
   document.querySelectorAll('#deliveryRows .delName').forEach(inp=>{ if(inp.value.trim()) boys.push(inp.value.trim()); });
 
-  // Other bills
   const otherBillsList=[];
   let otherBillsTotal=0;
   document.querySelectorAll('.other-bill-row').forEach(row=>{
@@ -817,7 +762,6 @@ function buildRowData(){
   };
 }
 
-/* Sync to Google Sheet */
 async function syncToSheet(){
   const statusEl=document.getElementById('saveStatus');
   statusEl.textContent='⏳ Syncing to Google Sheet…';
@@ -839,7 +783,6 @@ async function syncToSheet(){
   }
 }
 
-/* Save to Excel */
 async function saveToExcel(){
   const statusEl=document.getElementById('saveStatus');
   const newRow=buildRowData();
@@ -885,7 +828,6 @@ function downloadFresh(newRow){
   document.getElementById('saveStatus').textContent='⬇️ Downloaded. Use Chrome/Edge for auto-update to single file.';
 }
 
-/* Init */
 document.querySelectorAll('#cashView input').forEach(input=>{ input.addEventListener('input',calculate); });
 document.getElementById('entryDate').valueAsDate=new Date();
 addDeliveryRow(); calculate();
