@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
   /* =========== SHARED =========== */
   *{box-sizing:border-box;}
@@ -20,9 +21,9 @@
     position:sticky;top:0;z-index:50;
   }
   nav.app-switch button{
-    flex:1;padding:14px 8px;border:none;background:transparent;
+    flex:1;padding:14px 4px;border:none;background:transparent;
     color:#9FB4C6;font-family:'Oswald',sans-serif;font-weight:600;
-    font-size:13px;letter-spacing:0.5px;text-transform:uppercase;
+    font-size:12px;letter-spacing:0.5px;text-transform:uppercase;
     cursor:pointer;border-bottom:3px solid transparent;
   }
   nav.app-switch button.active{color:#fff;border-bottom-color:#FF6B1A;}
@@ -35,6 +36,971 @@
     --font-display:'Oswald',sans-serif;--font-body:'Inter',sans-serif;
     --font-mono:'IBM Plex Mono',monospace;
     background:var(--bg);color:var(--text);font-family:var(--font-body);min-height:100vh;
+  }
+  #attendanceView .wrap{max-width:480px;margin:0 auto;display:flex;flex-direction:column;}
+  #attendanceView header{
+    background:var(--navy);color:#fff;padding:18px 20px 16px;
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+  }
+  #attendanceView .brand-name{font-family:var(--font-display);font-weight:700;font-size:22px;letter-spacing:0.5px;text-transform:uppercase;line-height:1.1;}
+  #attendanceView .brand-sub{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#9FB4C6;margin-top:2px;}
+  #attendanceView .clock{text-align:right;font-family:var(--font-mono);}
+  #attendanceView .clock-time{font-size:18px;font-weight:600;}
+  #attendanceView .clock-date{font-size:11px;color:#9FB4C6;margin-top:2px;}
+  #attendanceView main{flex:1;padding:16px;display:flex;flex-direction:column;gap:14px;}
+  #attendanceView .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;}
+  #attendanceView .card h2{font-family:var(--font-display);font-size:14px;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px;color:var(--steel);}
+  #attendanceView .scan-stage{position:relative;width:100%;aspect-ratio:1/1;border-radius:14px;overflow:hidden;background:#0B1A26;}
+  #attendanceView .scan-stage video,#attendanceView .scan-stage canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+  #attendanceView .scan-stage canvas{display:none;}
+  #attendanceView .scan-ring{position:absolute;inset:10%;border-radius:50%;border:3px solid var(--flame);box-shadow:0 0 0 4px rgba(255,107,26,0.15);pointer-events:none;}
+  @media (prefers-reduced-motion:no-preference){#attendanceView .scan-ring.pulse{animation:pulseRing 1.6s ease-in-out infinite;}}
+  @keyframes pulseRing{0%,100%{box-shadow:0 0 0 4px rgba(255,107,26,0.15);}50%{box-shadow:0 0 0 12px rgba(255,107,26,0.05);}}
+  #attendanceView .scan-ring.success{border-color:var(--success);box-shadow:0 0 0 14px rgba(46,158,91,0.12);}
+  #attendanceView .scan-ring.invalid{border-color:var(--flame-deep);}
+  #attendanceView .scan-hint{position:absolute;left:0;right:0;bottom:10px;text-align:center;font-size:12px;color:#fff;background:rgba(0,0,0,0.35);margin:0 auto;width:fit-content;padding:5px 12px;border-radius:8px;}
+  #attendanceView .scan-checkmark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;}
+  #attendanceView .scan-checkmark svg{width:64px;height:64px;}
+  #attendanceView .scan-start-overlay{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(11,26,38,0.82);color:#fff;}
+  #attendanceView .scan-start-overlay p{margin:0;font-size:13px;line-height:1.5;color:#D7E3EC;}
+  #attendanceView .scan-start-btn{background:var(--flame);color:#fff;border:none;padding:13px 26px;border-radius:30px;font-family:var(--font-display);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;cursor:pointer;font-size:16px;}
+  #attendanceView .camera-error{background:#FFF4EC;border:1px solid #FFD7B8;color:#7A3B12;font-size:13px;line-height:1.5;border-radius:10px;padding:12px 14px;}
+  #attendanceView .manual-fallback{margin-top:12px;}
+  #attendanceView .manual-fallback input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:var(--font-mono);font-size:14px;}
+  #attendanceView .manual-fallback button{margin-top:8px;width:100%;padding:10px;border:none;border-radius:8px;background:var(--steel);color:#fff;font-family:var(--font-body);font-weight:600;font-size:14px;cursor:pointer;}
+
+  /* Name selector buttons */
+  #attendanceView .name-btn-row{display:flex;gap:10px;margin-bottom:12px;}
+  #attendanceView .name-btn{
+    flex:1;padding:14px 8px;border:2px solid var(--border);border-radius:12px;
+    background:#fff;color:var(--text);font-family:var(--font-display);font-weight:600;
+    font-size:18px;letter-spacing:0.5px;text-transform:uppercase;cursor:pointer;transition:all 0.15s;
+  }
+  #attendanceView .name-btn:hover{border-color:var(--flame);background:#FFF4EC;}
+  #attendanceView .name-btn.selected{border-color:var(--flame);background:var(--flame);color:#fff;}
+
+  #attendanceView .status-line{font-size:13px;color:var(--text-muted);margin:8px 0 14px;font-family:var(--font-mono);}
+  #attendanceView .action-btn{width:100%;min-height:56px;border:none;border-radius:10px;font-family:var(--font-display);font-weight:600;font-size:17px;letter-spacing:0.5px;text-transform:uppercase;color:#fff;cursor:pointer;}
+  #attendanceView .action-btn.checkin{background:var(--flame);}
+  #attendanceView .action-btn.checkout{background:var(--gas-blue);}
+  #attendanceView .action-btn[disabled]{background:#C7CFD4;color:#fff;cursor:default;}
+  #attendanceView .action-btn.loading{opacity:0.7;}
+  #attendanceView .result-msg{margin-top:12px;font-size:14px;padding:12px 14px;border-radius:10px;}
+  #attendanceView .result-msg.ok{background:#EAF7EF;color:#1E6B41;border:1px solid #BCE6CC;}
+  #attendanceView .result-msg.err{background:#FDECEA;color:#9A2A1A;border:1px solid #F6C6BD;}
+  #attendanceView .scan-next-btn{margin-top:12px;width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;background:#fff;color:var(--navy);font-weight:600;font-family:var(--font-body);cursor:pointer;}
+  #attendanceView table{width:100%;border-collapse:collapse;font-size:13px;}
+  #attendanceView thead th{text-align:left;font-family:var(--font-body);font-weight:600;color:var(--text-muted);text-transform:uppercase;font-size:11px;letter-spacing:0.5px;padding:6px 4px;border-bottom:1px solid var(--border);}
+  #attendanceView tbody td{padding:9px 4px;border-bottom:1px solid #F0F2F4;font-family:var(--font-mono);}
+  #attendanceView tbody td.name-cell{font-family:var(--font-body);font-weight:500;}
+  #attendanceView .pill{display:inline-block;font-family:var(--font-body);font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;}
+  #attendanceView .pill.in{background:#FFF1E6;color:var(--flame-deep);border:1px solid #FFD3B5;}
+  #attendanceView .pill.out{background:#E8F5EC;color:var(--success);border:1px solid #BCE6CC;}
+  #attendanceView .empty-log{font-size:13px;color:var(--text-muted);text-align:center;padding:14px 0;}
+  #attendanceView .log-updated{font-size:11px;color:var(--text-muted);margin-top:10px;font-family:var(--font-mono);text-align:right;}
+  #attendanceView .hidden{display:none !important;}
+
+  /* =========== QR VIEW =========== */
+  #qrView{
+    background:#EEF1F3;min-height:100vh;
+    font-family:'Inter',sans-serif;
+  }
+  #qrView .qr-wrap{
+    max-width:420px;margin:0 auto;padding:24px 20px;
+    display:flex;flex-direction:column;align-items:center;gap:20px;
+  }
+  #qrView .qr-header{
+    background:#0E2A47;color:#fff;width:100%;
+    border-radius:16px;padding:20px 24px;text-align:center;
+  }
+  #qrView .qr-header h1{
+    font-family:'Oswald',sans-serif;font-size:26px;font-weight:700;
+    letter-spacing:1px;text-transform:uppercase;margin:0 0 4px;
+  }
+  #qrView .qr-header p{
+    font-size:12px;letter-spacing:2px;text-transform:uppercase;
+    color:#9FB4C6;margin:0;
+  }
+  #qrView .qr-card{
+    background:#fff;border-radius:20px;padding:28px;
+    box-shadow:0 4px 20px rgba(14,42,71,0.10);
+    display:flex;flex-direction:column;align-items:center;gap:16px;
+    width:100%;
+  }
+  #qrView .qr-box{
+    background:#fff;padding:16px;border-radius:12px;
+    border:3px solid #0E2A47;
+  }
+  #qrView #qrcode canvas, #qrView #qrcode img{
+    display:block;
+  }
+  #qrView .qr-label{
+    font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;
+    letter-spacing:3px;color:#0E2A47;text-transform:uppercase;
+    border-top:2px dashed #D7DEE3;padding-top:12px;width:100%;text-align:center;
+  }
+  #qrView .qr-sub{
+    font-size:12px;color:#5B6B76;text-align:center;line-height:1.5;
+    font-family:'Inter',sans-serif;
+  }
+  #qrView .qr-instructions{
+    background:#FFF4EC;border:1px solid #FFD3B5;border-radius:12px;
+    padding:14px 16px;width:100%;
+  }
+  #qrView .qr-instructions h3{
+    font-family:'Oswald',sans-serif;font-size:14px;text-transform:uppercase;
+    letter-spacing:0.5px;color:#FF6B1A;margin:0 0 8px;
+  }
+  #qrView .qr-instructions ol{
+    margin:0;padding-left:18px;font-size:13px;color:#5B2D0A;line-height:1.8;
+  }
+  #qrView .print-btn{
+    width:100%;padding:16px;border:none;border-radius:12px;
+    background:#FF6B1A;color:#fff;
+    font-family:'Oswald',sans-serif;font-weight:700;font-size:18px;
+    letter-spacing:0.5px;text-transform:uppercase;cursor:pointer;
+    box-shadow:0 4px 12px rgba(255,107,26,0.3);
+  }
+  #qrView .print-btn:active{background:#E8401C;}
+  #qrView .download-btn{
+    width:100%;padding:14px;border:2px solid #0E2A47;border-radius:12px;
+    background:#fff;color:#0E2A47;
+    font-family:'Oswald',sans-serif;font-weight:700;font-size:16px;
+    letter-spacing:0.5px;text-transform:uppercase;cursor:pointer;
+  }
+
+  /* Print styles */
+  @media print{
+    nav.app-switch, #attendanceView, #cashView, .print-btn, .download-btn, .qr-instructions, .qr-sub{ display:none !important; }
+    #qrView{ background:#fff !important; }
+    #qrView .qr-wrap{ margin:0 auto; padding:40px; }
+    #qrView .qr-header{ background:#0E2A47 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    #qrView .qr-card{ box-shadow:none; border:1px solid #ccc; }
+  }
+
+  /* =========== CASH COUNT =========== */
+  #cashView,#cashView *{font-family:'Segoe UI',Arial,sans-serif;}
+  #cashView{padding:16px;background:linear-gradient(135deg,#e0f7fa,#fff3e0);color:#333;min-height:100vh;}
+  #cashView .container{max-width:480px;margin:0 auto;}
+  #cashView h1{text-align:center;color:#d84315;font-size:22px;margin-bottom:4px;}
+  #cashView h2.sub{text-align:center;color:#558b2f;font-size:14px;margin-top:0;margin-bottom:16px;font-weight:normal;}
+  #cashView .card{background:#fff;border-radius:12px;padding:14px 16px;margin-bottom:14px;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
+  #cashView .card h3{margin:0 0 10px 0;font-size:15px;color:#1565c0;border-bottom:1px solid #eee;padding-bottom:6px;display:flex;justify-content:space-between;align-items:center;}
+  #cashView .row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+  #cashView .row label{font-size:14px;flex:1;}
+  #cashView .row input{width:110px;padding:6px 8px;font-size:14px;border:1px solid #ccc;border-radius:6px;text-align:right;}
+  #cashView .note-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+  #cashView .note-label{background:#ffe0b2;border-radius:6px;padding:6px 10px;font-weight:bold;width:60px;text-align:center;font-size:14px;}
+  #cashView .note-row input{width:70px;padding:6px;text-align:center;border:1px solid #ccc;border-radius:6px;font-size:14px;}
+  #cashView .note-row .note-total{flex:1;text-align:right;font-size:14px;color:#555;}
+  #cashView .summary-row{display:flex;justify-content:space-between;margin-bottom:6px;font-size:14px;}
+  #cashView .summary-row.total{font-weight:bold;font-size:17px;border-top:1px solid #ddd;padding-top:8px;margin-top:6px;}
+  #cashView .summary-row.diff{font-weight:bold;font-size:18px;padding:10px;border-radius:8px;text-align:center;margin-top:8px;}
+  #cashView .pos{background:#c8e6c9;color:#2e7d32;}
+  #cashView .neg{background:#ffcdd2;color:#c62828;}
+  #cashView .zero{background:#dcedc8;color:#33691e;}
+  #cashView button.reset{width:100%;padding:10px;background:#d84315;color:#fff;border:none;border-radius:8px;font-size:15px;margin-top:6px;cursor:pointer;}
+  #cashView button.reset:active{background:#bf360c;}
+  #cashView button.export{width:100%;padding:12px;background:#2e7d32;color:#fff;border:none;border-radius:8px;font-size:16px;margin-top:10px;cursor:pointer;font-weight:bold;}
+  #cashView button.export:active{background:#1b5e20;}
+  #cashView button.sync-btn{width:100%;padding:12px;background:#1565c0;color:#fff;border:none;border-radius:8px;font-size:16px;margin-top:8px;cursor:pointer;font-weight:bold;}
+  #cashView button.sync-btn:active{background:#0d47a1;}
+  #cashView button.small{padding:4px 10px;font-size:13px;border:none;border-radius:6px;cursor:pointer;color:#fff;}
+  #cashView .add-btn{background:#1565c0;}
+  #cashView .del-btn{background:#c62828;}
+  #cashView .entry-row{display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap;}
+  #cashView .entry-row input{padding:6px;font-size:13px;border:1px solid #ccc;border-radius:6px;}
+  #cashView .entry-row .name-input{flex:1;}
+  #cashView .other-bill-row{display:flex;gap:6px;align-items:center;margin-bottom:8px;}
+  #cashView .other-bill-row .bill-label{flex:1;padding:6px 8px;font-size:13px;border:1px solid #ccc;border-radius:6px;}
+  #cashView .other-bill-row .bill-amount{width:100px;padding:6px 8px;font-size:13px;border:1px solid #ccc;border-radius:6px;text-align:right;}
+  #cashView .status{text-align:center;font-size:12px;color:#777;margin-top:6px;}
+  #cashView .online-row{background:#e8f5e9;border-radius:8px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;}
+  #cashView .online-row label{font-size:14px;color:#2e7d32;font-weight:600;}
+  #cashView .online-row input{width:110px;padding:6px 8px;font-size:14px;border:1px solid #a5d6a7;border-radius:6px;text-align:right;background:#f1f8e9;}
+</style>
+</head>
+<body>
+
+<nav class="app-switch">
+  <button data-target="attendanceView" class="active">📋 Attendance</button>
+  <button data-target="cashView">💵 Cash Count</button>
+  <button data-target="qrView">🔲 QR Code</button>
+</nav>
+
+<!-- ======================= ATTENDANCE VIEW ======================= -->
+<div id="attendanceView" class="view active">
+<div class="wrap">
+  <header>
+    <div>
+      <div class="brand-name">BRK Indane</div>
+      <div class="brand-sub">Office Attendance</div>
+    </div>
+    <div class="clock">
+      <div class="clock-time" id="clockTime">--:--:--</div>
+      <div class="clock-date" id="clockDate">-- --- ----</div>
+    </div>
+  </header>
+
+  <main>
+    <section class="card" id="scanCard">
+      <h2>Scan the office QR code</h2>
+      <div class="scan-stage">
+        <video id="video" muted playsinline></video>
+        <canvas id="canvas"></canvas>
+        <div class="scan-ring pulse" id="scanRing"></div>
+        <div class="scan-checkmark hidden" id="scanCheckmark">
+          <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="11" fill="#2E9E5B"/><path d="M7 12.5l3.2 3.2L17 9" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="scan-hint" id="scanHint">Point the camera at the BRK Indane QR code</div>
+        <div class="scan-start-overlay" id="scanStartOverlay">
+          <p>This app needs camera access to scan the QR code.</p>
+          <button class="scan-start-btn" id="scanStartBtn">📷 Start Camera</button>
+        </div>
+      </div>
+      <div class="camera-error hidden" id="cameraError">
+        <div id="cameraErrorText">Couldn't access the camera.</div>
+        <div class="manual-fallback">
+          <input type="text" id="manualCode" placeholder="Type: BRK INDANE" />
+          <button id="manualSubmit">Submit code</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card hidden" id="employeeCard">
+      <h2>Who are you?</h2>
+      <div class="name-btn-row">
+        <button class="name-btn" data-name="Navya" onclick="selectName('Navya', this)">👩 Navya</button>
+        <button class="name-btn" data-name="Shiva" onclick="selectName('Shiva', this)">👨 Shiva</button>
+      </div>
+      <div class="status-line" id="statusLine"></div>
+      <button class="action-btn hidden" id="actionBtn"></button>
+      <div class="result-msg hidden" id="resultMsg"></div>
+      <button class="scan-next-btn hidden" id="scanNextBtn">🔁 Scan next person</button>
+    </section>
+
+    <section class="card" id="logCard">
+      <h2>Today's attendance</h2>
+      <div id="logTableWrap"><div class="empty-log">Loading…</div></div>
+      <div class="log-updated hidden" id="logUpdated"></div>
+    </section>
+  </main>
+</div>
+</div>
+
+<!-- ======================= QR VIEW ======================= -->
+<div id="qrView" class="view">
+  <div class="qr-wrap">
+    <div class="qr-header">
+      <h1>🔥 BRK Indane</h1>
+      <p>Office Attendance QR Code</p>
+    </div>
+
+    <div class="qr-card">
+      <div class="qr-box">
+        <div id="qrcode"></div>
+      </div>
+      <div class="qr-label">BRK INDANE</div>
+      <p class="qr-sub">Print this and stick it at the office entrance.<br>Staff scan this every day to mark attendance.</p>
+    </div>
+
+    <div class="qr-instructions">
+      <h3>📌 How to use</h3>
+      <ol>
+        <li>Tap <strong>Print / Save</strong> below</li>
+        <li>Print and laminate the QR code</li>
+        <li>Stick it at the office entrance</li>
+        <li>Staff open the app → Attendance → Start Camera → scan</li>
+      </ol>
+    </div>
+
+    <button class="print-btn" onclick="window.print()">🖨️ Print QR Code</button>
+    <button class="download-btn" onclick="downloadQR()">⬇️ Download as Image</button>
+  </div>
+</div>
+
+<!-- ======================= CASH COUNT VIEW ======================= -->
+<div id="cashView" class="view">
+<div class="container">
+  <h1>🔥 BRK Indane Gas Office</h1>
+  <h2 class="sub">Daily Cash Count Sheet</h2>
+
+  <div class="card">
+    <div class="row"><label>📅 Date</label><input type="date" id="entryDate"></div>
+  </div>
+
+  <div class="card">
+    <h3>🛵 Delivery Boys <button class="small add-btn" onclick="addDeliveryRow()">+ Add</button></h3>
+    <div id="deliveryRows"></div>
+  </div>
+
+  <div class="card">
+    <h3>📦 Order & Bill Calculation</h3>
+    <div class="row"><label>Assigned Orders (Cylinders)</label><input type="number" id="assignedOrders" min="0" value="0"></div>
+    <div class="row"><label>Online Bill Entry (Cylinders)</label><input type="number" id="onlineOrders" min="0" value="0"></div>
+    <div class="row"><label>Cash Orders (auto)</label><input type="number" id="cashOrders" value="0" disabled style="background:#f1f8e9;"></div>
+    <div class="row"><label>Rate per Cylinder (₹)</label><input type="number" id="rate" value="994"></div>
+    <hr style="margin:8px 0;border:none;border-top:1px solid #eee;">
+    <div class="row" style="font-weight:600;color:#e65100;">
+      <label>🏢 Office Entry Bills (Cylinders)</label>
+      <input type="number" id="officeEntryBills" min="0" value="0">
+    </div>
+    <div class="row" style="font-size:12px;color:#888;margin-top:-4px;">
+      <label>↳ Amount (auto)</label>
+      <span id="officeEntryAmount" style="font-weight:600;color:#e65100;">₹0</span>
+    </div>
+    <hr style="margin:8px 0;border:none;border-top:1px solid #eee;">
+    <div style="margin-bottom:6px;font-weight:600;color:#6a1b9a;font-size:14px;">📝 Other Bills</div>
+    <div id="otherBillRows"></div>
+    <button class="small add-btn" style="background:#6a1b9a;margin-bottom:8px;" onclick="addOtherBillRow()">+ Add Other Bill</button>
+    <div class="summary-row total"><span>📊 Expected Cash (Cylinder sales)</span><span id="expectedCash">₹0</span></div>
+  </div>
+
+  <div class="card">
+    <h3>💵 Cash Notes Count</h3>
+    <div class="note-row"><div class="note-label">₹500</div><span>×</span><input type="number" min="0" class="noteCount" data-val="500" value="0"><div class="note-total" data-total="500">= ₹0</div></div>
+    <div class="note-row"><div class="note-label">₹200</div><span>×</span><input type="number" min="0" class="noteCount" data-val="200" value="0"><div class="note-total" data-total="200">= ₹0</div></div>
+    <div class="note-row"><div class="note-label">₹100</div><span>×</span><input type="number" min="0" class="noteCount" data-val="100" value="0"><div class="note-total" data-total="100">= ₹0</div></div>
+    <div class="note-row"><div class="note-label">₹50</div><span>×</span><input type="number" min="0" class="noteCount" data-val="50" value="0"><div class="note-total" data-total="50">= ₹0</div></div>
+    <div class="note-row"><div class="note-label">₹20</div><span>×</span><input type="number" min="0" class="noteCount" data-val="20" value="0"><div class="note-total" data-total="20">= ₹0</div></div>
+    <div class="note-row"><div class="note-label">₹10</div><span>×</span><input type="number" min="0" class="noteCount" data-val="10" value="0"><div class="note-total" data-total="10">= ₹0</div></div>
+    <div class="summary-row total" style="margin-top:10px;"><span>💰 Cash Counted</span><span id="totalCounted">₹0</span></div>
+  </div>
+
+  <div class="card">
+    <h3>📲 Online Payment Collected</h3>
+    <div class="online-row">
+      <label>Online Amount Received (₹)</label>
+      <input type="number" id="onlineCollected" min="0" value="0">
+    </div>
+    <div class="summary-row" style="font-size:13px;color:#555;">
+      <span>Cash + Online Total</span>
+      <span id="grandTotal" style="font-weight:700;">₹0</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>📊 Summary</h3>
+    <div class="summary-row"><span>Cash Counted</span><span id="cashCountedSummary">₹0</span></div>
+    <div class="summary-row"><span>Online Collected</span><span id="onlineSummary">₹0</span></div>
+    <div class="summary-row total"><span>Total Collected</span><span id="grandTotalSummary">₹0</span></div>
+    <div class="summary-row"><span>Expected (Cylinder Sales)</span><span id="expectedCash2">₹0</span></div>
+    <div class="summary-row"><span>Office Entry Bills</span><span id="officeEntrySummary">₹0</span></div>
+    <div class="summary-row" id="otherBillsSummaryRow"><span>Other Bills</span><span id="otherBillsSummary">₹0</span></div>
+    <div class="summary-row diff" id="diffRow"><span id="diffValue">₹0</span></div>
+  </div>
+
+  <button class="reset" onclick="resetAll()">🔄 Reset All</button>
+  <button class="sync-btn" onclick="syncToSheet()">☁️ Sync to Google Sheet</button>
+  <button class="export" onclick="saveToExcel()">💾 Save to Excel File</button>
+  <div class="status" id="saveStatus"></div>
+</div>
+</div>
+
+<script>
+/* =========== APP SWITCHER =========== */
+document.querySelectorAll('nav.app-switch button').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('nav.app-switch button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.target).classList.add('active');
+  });
+});
+</script>
+
+<script>
+/* =========== QR CODE GENERATOR =========== */
+(function generateQR(){
+  const container = document.getElementById('qrcode');
+  new QRCode(container, {
+    text: 'BRK INDANE',
+    width: 240,
+    height: 240,
+    colorDark: '#000000',
+    colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.H  // Highest error correction
+  });
+})();
+
+function downloadQR(){
+  const canvas = document.querySelector('#qrcode canvas');
+  if(!canvas){ alert('QR not ready yet — please wait a moment'); return; }
+  
+  // Create a nicer image with label
+  const offscreen = document.createElement('canvas');
+  offscreen.width = 320;
+  offscreen.height = 380;
+  const ctx = offscreen.getContext('2d');
+  
+  // White background
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 320, 380);
+  
+  // Navy header bar
+  ctx.fillStyle = '#0E2A47';
+  ctx.fillRect(0, 0, 320, 56);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 20px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('BRK INDANE', 160, 26);
+  ctx.font = '11px Arial';
+  ctx.fillStyle = '#9FB4C6';
+  ctx.fillText('OFFICE ATTENDANCE QR CODE', 160, 46);
+  
+  // QR code
+  ctx.drawImage(canvas, 40, 72, 240, 240);
+  
+  // Label
+  ctx.fillStyle = '#0E2A47';
+  ctx.font = 'bold 18px Arial';
+  ctx.fillText('BRK INDANE', 160, 342);
+  ctx.font = '12px Arial';
+  ctx.fillStyle = '#5B6B76';
+  ctx.fillText('Scan to mark attendance', 160, 366);
+  
+  const link = document.createElement('a');
+  link.download = 'BRK_INDANE_QR.png';
+  link.href = offscreen.toDataURL('image/png');
+  link.click();
+}
+</script>
+
+<script>
+/* =========== ATTENDANCE =========== */
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwnmv6VS8AkDTxk8q0Fp_jAiXx6annH1xXJLfVFE_LmfHl-_WueWB4zHVesJHNknAth1A/exec";
+const VALID_CODE = "BRK INDANE";
+
+// Clock
+function tickClock(){
+  const now = new Date();
+  document.getElementById('clockTime').textContent = now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  document.getElementById('clockDate').textContent = now.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+}
+tickClock(); setInterval(tickClock,1000);
+
+async function apiGet(params){
+  const url = WEB_APP_URL+'?'+new URLSearchParams(params).toString();
+  const res = await fetch(url); if(!res.ok) throw new Error('Request failed'); return res.json();
+}
+async function apiPost(payload){
+  const res = await fetch(WEB_APP_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});
+  if(!res.ok) throw new Error('Request failed'); return res.json();
+}
+
+/* Camera + QR */
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d',{willReadFrequently:true});
+const scanRing = document.getElementById('scanRing');
+const scanHint = document.getElementById('scanHint');
+const scanCheckmark = document.getElementById('scanCheckmark');
+const scanStartOverlay = document.getElementById('scanStartOverlay');
+const cameraError = document.getElementById('cameraError');
+const cameraErrorText = document.getElementById('cameraErrorText');
+let scanning = false;
+let stream = null;
+let scanInterval = null;
+let torchOn = false;
+let torchTrack = null;
+let lastScannedTime = 0;
+const SCAN_THROTTLE = 100;
+
+function showCameraError(msg){ cameraErrorText.textContent=msg; cameraError.classList.remove('hidden'); }
+
+async function startCamera(){
+  cameraError.classList.add('hidden');
+  if(location.protocol!=='https:' && location.hostname!=='localhost'){
+    showCameraError("Camera needs HTTPS. Host this file on GitHub Pages or Netlify.");
+    return;
+  }
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    showCameraError("This browser can't access the camera. Try Chrome directly.");
+    return;
+  }
+  try{
+    const constraints = {
+      video:{
+        facingMode:'environment',
+        width:{min:320, ideal:1280, max:1920},
+        height:{min:320, ideal:1280, max:1920}
+      },
+      audio: false
+    };
+    
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    video.srcObject = stream;
+    
+    video.onloadedmetadata = () => {
+      video.play().catch(e => console.log('Play failed:', e));
+    };
+
+    torchTrack = stream.getVideoTracks()[0];
+
+    const caps = torchTrack.getCapabilities ? torchTrack.getCapabilities() : {};
+    if(caps.torch){
+      const torchBtn = document.createElement('button');
+      torchBtn.textContent = '🔦';
+      torchBtn.style.cssText = 'position:absolute;top:10px;right:10px;z-index:20;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:38px;height:38px;font-size:18px;cursor:pointer;';
+      torchBtn.onclick = async ()=>{
+        torchOn = !torchOn;
+        await torchTrack.applyConstraints({advanced:[{torch:torchOn}]});
+        torchBtn.style.background = torchOn ? 'rgba(255,200,0,0.7)' : 'rgba(0,0,0,0.5)';
+      };
+      document.querySelector('.scan-stage').appendChild(torchBtn);
+    }
+
+    scanStartOverlay.classList.add('hidden');
+    scanning = true;
+    lastScannedTime = 0;
+    scanInterval = setInterval(tick, 33);
+  }catch(err){
+    let msg="Couldn't access the camera. ";
+    if(err.name==='NotAllowedError') msg+="Allow camera permission in browser settings, then reload.";
+    else if(err.name==='NotFoundError') msg+="No camera found on this device.";
+    else if(err.name==='NotReadableError') msg+="Another app is using the camera — close it and retry.";
+    else msg+="Try reloading or type the code below.";
+    showCameraError(msg);
+  }
+}
+
+function tick(){
+  if(!scanning) return;
+  if(video.readyState !== video.HAVE_ENOUGH_DATA) return;
+
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  
+  // ✅ FIX: Guard against zero/tiny dimensions before scanning
+  if(!vw || !vh || vw < 100 || vh < 100) return;
+
+  canvas.width  = vw;
+  canvas.height = vh;
+
+  // Primary attempt
+  ctx.drawImage(video, 0, 0, vw, vh);
+  let code = tryDecode(vw, vh, 'attemptBoth');
+  if(code){ handleScanResult(code); return; }
+
+  // Inverted attempt
+  const imageData = ctx.getImageData(0, 0, vw, vh);
+  invertImageData(imageData.data);
+  ctx.putImageData(imageData, 0, 0);
+  code = tryDecode(vw, vh, 'dontInvert');
+  if(code){ handleScanResult(code); }
+}
+
+function invertImageData(data) {
+  for(let i = 0; i < data.length; i += 4) {
+    data[i]     = 255 - data[i];
+    data[i + 1] = 255 - data[i + 1];
+    data[i + 2] = 255 - data[i + 2];
+  }
+}
+
+function tryDecode(w, h, inversionMode){
+  try{
+    const imageData = ctx.getImageData(0, 0, w, h);
+    const result = jsQR(imageData.data, w, h, {inversionAttempts: inversionMode});
+    if(result && result.data) return result.data;
+  }catch(e){}
+  return null;
+}
+
+function handleScanResult(text){
+  const now = Date.now();
+  if(now - lastScannedTime < SCAN_THROTTLE) return;
+  lastScannedTime = now;
+
+  const clean = text.trim().toUpperCase();
+  if(clean === VALID_CODE){
+    scanning = false;
+    if(scanInterval){ clearInterval(scanInterval); scanInterval = null; }
+    scanRing.classList.remove('pulse','invalid');
+    scanRing.classList.add('success');
+    scanCheckmark.classList.remove('hidden');
+    scanHint.textContent = '✅ Code verified!';
+    setTimeout(()=>{ showEmployeeCard(); }, 500);
+  } else {
+    scanRing.classList.add('invalid');
+    scanHint.textContent = "That's not the BRK Indane code — try again";
+    setTimeout(()=>{
+      scanRing.classList.remove('invalid');
+      scanHint.textContent = 'Point the camera at the BRK Indane QR code';
+    }, 1200);
+  }
+}
+
+document.getElementById('scanStartBtn').addEventListener('click', startCamera);
+
+document.getElementById('manualSubmit').addEventListener('click',()=>{
+  const val = document.getElementById('manualCode').value || '';
+  if(val.trim().toUpperCase() === VALID_CODE){ 
+    showEmployeeCard(); 
+  } else { 
+    document.getElementById('manualCode').style.borderColor = '#E8401C'; 
+  }
+});
+
+/* Employee card */
+const employeeCard = document.getElementById('employeeCard');
+const statusLine = document.getElementById('statusLine');
+const actionBtn = document.getElementById('actionBtn');
+const resultMsg = document.getElementById('resultMsg');
+const scanNextBtn = document.getElementById('scanNextBtn');
+let selectedName = '';
+
+function showEmployeeCard(){
+  document.getElementById('scanCard').classList.add('hidden');
+  employeeCard.classList.remove('hidden');
+  resultMsg.classList.add('hidden');
+  scanNextBtn.classList.add('hidden');
+  actionBtn.classList.add('hidden');
+  statusLine.textContent = '';
+  selectedName = '';
+  document.querySelectorAll('.name-btn').forEach(b=>b.classList.remove('selected'));
+}
+
+function selectName(name, btn){
+  selectedName = name;
+  document.querySelectorAll('.name-btn').forEach(b=>b.classList.remove('selected'));
+  btn.classList.add('selected');
+  checkStatus(name);
+}
+
+async function checkStatus(name){
+  if(!name) return;
+  statusLine.textContent = "Checking today's status…";
+  actionBtn.classList.add('hidden');
+  resultMsg.classList.add('hidden');
+  try{
+    const status = await apiGet({action:'status',name});
+    renderActionButton(name,status);
+  }catch(e){
+    statusLine.textContent = '';
+    resultMsg.textContent = "Couldn't reach the attendance sheet. Check connection.";
+    resultMsg.className = 'result-msg err';
+    resultMsg.classList.remove('hidden');
+  }
+}
+
+function renderActionButton(name,status){
+  if(!status.checkedIn){
+    statusLine.textContent = 'Not checked in yet today.';
+    actionBtn.textContent = '✅ Check In';
+    actionBtn.className = 'action-btn checkin';
+    actionBtn.disabled = false;
+    actionBtn.onclick = ()=>doAction(name,'checkin');
+    actionBtn.classList.remove('hidden');
+  } else if(status.checkedIn&&!status.checkedOut){
+    statusLine.textContent = 'Checked in at '+status.checkInTime+'.';
+    actionBtn.textContent = '🚪 Check Out';
+    actionBtn.className = 'action-btn checkout';
+    actionBtn.disabled = false;
+    actionBtn.onclick = ()=>doAction(name,'checkout');
+    actionBtn.classList.remove('hidden');
+  } else {
+    statusLine.textContent = 'Done for today — In: '+status.checkInTime+' · Out: '+status.checkOutTime;
+    actionBtn.classList.add('hidden');
+    scanNextBtn.classList.remove('hidden');
+  }
+}
+
+async function doAction(name,action){
+  actionBtn.disabled = true;
+  actionBtn.classList.add('loading');
+  actionBtn.textContent = action==='checkin'?'Checking in…':'Checking out…';
+  try{
+    const res = await apiPost({name,action});
+    resultMsg.textContent = res.ok?res.message:res.error;
+    resultMsg.className = 'result-msg '+(res.ok?'ok':'err');
+    resultMsg.classList.remove('hidden');
+    if(res.status) renderActionButton(name,res.status);
+    if(res.ok){ actionBtn.classList.add('hidden'); scanNextBtn.classList.remove('hidden'); loadTodayLog(); }
+  }catch(e){
+    resultMsg.textContent = "Couldn't reach the attendance sheet. Check connection.";
+    resultMsg.className = 'result-msg err';
+    resultMsg.classList.remove('hidden');
+  }finally{ actionBtn.classList.remove('loading'); }
+}
+
+scanNextBtn.addEventListener('click',()=>{
+  employeeCard.classList.add('hidden');
+  document.getElementById('scanCard').classList.remove('hidden');
+  selectedName = '';
+  document.querySelectorAll('.name-btn').forEach(b=>b.classList.remove('selected'));
+  scanRing.classList.remove('success');
+  scanRing.classList.add('pulse');
+  scanCheckmark.classList.add('hidden');
+  scanHint.textContent = 'Point the camera at the BRK Indane QR code';
+  scanning = true;
+  lastScannedTime = 0;
+  if(scanInterval) clearInterval(scanInterval);
+  scanInterval = setInterval(tick, 33);
+});
+
+/* Today's log */
+async function loadTodayLog(){
+  const wrap = document.getElementById('logTableWrap');
+  try{
+    const data = await apiGet({action:'log'});
+    const rows = data.rows||[];
+    if(rows.length===0){
+      wrap.innerHTML = '<div class="empty-log">No check-ins yet today.</div>';
+    } else {
+      let html = '<table><thead><tr><th>Name</th><th>In</th><th>Out</th><th>Status</th></tr></thead><tbody>';
+      rows.forEach(r=>{
+        const pill = r.checkOut
+          ?'<span class="pill out">Checked Out</span>'
+          :'<span class="pill in">Present</span>';
+        html += '<tr><td class="name-cell">'+escapeHtml(r.name)+'</td>'+
+              '<td>'+escapeHtml(r.checkIn||'—')+'</td>'+
+              '<td>'+escapeHtml(r.checkOut||'—')+'</td>'+
+              '<td>'+pill+'</td></tr>';
+      });
+      html += '</tbody></table>';
+      wrap.innerHTML = html;
+    }
+    const upd = document.getElementById('logUpdated');
+    upd.textContent = 'Updated '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+    upd.classList.remove('hidden');
+  }catch(e){
+    wrap.innerHTML = '<div class="empty-log">Couldn\'t load today\'s sheet right now.</div>';
+  }
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+loadTodayLog(); setInterval(loadTodayLog,20000);
+</script>
+
+<script>
+/* =========== CASH COUNT =========== */
+let deliveryRowCount=0;
+let otherBillCount=0;
+let fileHandle=null;
+
+function addDeliveryRow(name=''){
+  deliveryRowCount++;
+  const id='del_'+deliveryRowCount;
+  const div=document.createElement('div');
+  div.className='entry-row'; div.id=id;
+  div.innerHTML=`<input type="text" class="name-input delName" placeholder="Delivery boy name" value="${name}">
+    <button class="small del-btn" onclick="document.getElementById('${id}').remove();calculate()">✕</button>`;
+  document.getElementById('deliveryRows').appendChild(div);
+}
+
+function addOtherBillRow(){
+  otherBillCount++;
+  const id='obill_'+otherBillCount;
+  const div=document.createElement('div');
+  div.className='other-bill-row'; div.id=id;
+  div.innerHTML=`<input type="text" class="bill-label obillLabel" placeholder="Bill type (e.g. Booking fee)">
+    <input type="number" class="bill-amount obillAmount" placeholder="₹0" min="0" value="0" oninput="calculate()">
+    <button class="small del-btn" onclick="document.getElementById('${id}').remove();calculate()">✕</button>`;
+  document.getElementById('otherBillRows').appendChild(div);
+  div.querySelector('.obillAmount').addEventListener('input',calculate);
+}
+
+function calculate(){
+  const assigned=parseFloat(document.getElementById('assignedOrders').value)||0;
+  const online=parseFloat(document.getElementById('onlineOrders').value)||0;
+  const rate=parseFloat(document.getElementById('rate').value)||0;
+  const officeEntry=parseFloat(document.getElementById('officeEntryBills').value)||0;
+  const onlineCollected=parseFloat(document.getElementById('onlineCollected').value)||0;
+
+  const cashOrders=Math.max(assigned-online,0);
+  document.getElementById('cashOrders').value=cashOrders;
+
+  const officeEntryAmt=officeEntry*rate;
+  document.getElementById('officeEntryAmount').textContent='₹'+officeEntryAmt.toLocaleString('en-IN');
+
+  let otherBillsTotal=0;
+  document.querySelectorAll('.obillAmount').forEach(inp=>{
+    otherBillsTotal+=(parseFloat(inp.value)||0);
+  });
+
+  const expected=cashOrders*rate;
+  document.getElementById('expectedCash').textContent='₹'+expected.toLocaleString('en-IN');
+  document.getElementById('expectedCash2').textContent='₹'+expected.toLocaleString('en-IN');
+  document.getElementById('officeEntrySummary').textContent='₹'+officeEntryAmt.toLocaleString('en-IN');
+  document.getElementById('otherBillsSummary').textContent='₹'+otherBillsTotal.toLocaleString('en-IN');
+
+  let totalCounted=0;
+  document.querySelectorAll('.noteCount').forEach(input=>{
+    const denom=parseFloat(input.dataset.val);
+    const count=parseFloat(input.value)||0;
+    const subtotal=denom*count;
+    totalCounted+=subtotal;
+    document.querySelector(`.note-total[data-total="${denom}"]`).textContent='= ₹'+subtotal.toLocaleString('en-IN');
+  });
+  document.getElementById('totalCounted').textContent='₹'+totalCounted.toLocaleString('en-IN');
+  document.getElementById('cashCountedSummary').textContent='₹'+totalCounted.toLocaleString('en-IN');
+
+  const grandTotal=totalCounted+onlineCollected;
+  document.getElementById('grandTotal').textContent='₹'+grandTotal.toLocaleString('en-IN');
+  document.getElementById('grandTotalSummary').textContent='₹'+grandTotal.toLocaleString('en-IN');
+  document.getElementById('onlineSummary').textContent='₹'+onlineCollected.toLocaleString('en-IN');
+
+  const totalExpected=expected+officeEntryAmt+otherBillsTotal;
+  const diff=grandTotal-totalExpected;
+  const diffEl=document.getElementById('diffValue');
+  const diffRow=document.getElementById('diffRow');
+  diffRow.classList.remove('pos','neg','zero');
+  if(diff>0){ diffEl.textContent='Excess by ₹'+diff.toLocaleString('en-IN'); diffRow.classList.add('pos'); }
+  else if(diff<0){ diffEl.textContent='Shortage by ₹'+Math.abs(diff).toLocaleString('en-IN'); diffRow.classList.add('neg'); }
+  else { diffEl.textContent='✅ Cash Matched'; diffRow.classList.add('zero'); }
+}
+
+function resetAll(){
+  document.querySelectorAll('#cashView input').forEach(input=>{
+    if(input.id==='rate'){ input.value=994; }
+    else if(input.id==='entryDate'){ /* keep */ }
+    else if(!input.disabled&&input.type!=='text'){ input.value=0; }
+  });
+  document.getElementById('deliveryRows').innerHTML='';
+  document.getElementById('otherBillRows').innerHTML='';
+  deliveryRowCount=0; otherBillCount=0;
+  addDeliveryRow(); calculate();
+}
+
+function buildRowData(){
+  const date=document.getElementById('entryDate').value||new Date().toISOString().split('T')[0];
+  const assigned=parseFloat(document.getElementById('assignedOrders').value)||0;
+  const online=parseFloat(document.getElementById('onlineOrders').value)||0;
+  const cashOrders=parseFloat(document.getElementById('cashOrders').value)||0;
+  const rate=parseFloat(document.getElementById('rate').value)||0;
+  const officeEntry=parseFloat(document.getElementById('officeEntryBills').value)||0;
+  const officeEntryAmt=officeEntry*rate;
+  const onlineCollected=parseFloat(document.getElementById('onlineCollected').value)||0;
+  const expected=cashOrders*rate;
+
+  const boys=[];
+  document.querySelectorAll('#deliveryRows .delName').forEach(inp=>{ if(inp.value.trim()) boys.push(inp.value.trim()); });
+
+  const otherBillsList=[];
+  let otherBillsTotal=0;
+  document.querySelectorAll('.other-bill-row').forEach(row=>{
+    const label=row.querySelector('.obillLabel').value.trim()||'Other';
+    const amt=parseFloat(row.querySelector('.obillAmount').value)||0;
+    otherBillsList.push(label+': ₹'+amt);
+    otherBillsTotal+=amt;
+  });
+
+  const notes={};
+  let totalCounted=0;
+  document.querySelectorAll('.noteCount').forEach(input=>{
+    const denom=input.dataset.val;
+    const count=parseFloat(input.value)||0;
+    notes[denom]=count;
+    totalCounted+=denom*count;
+  });
+
+  const grandTotal=totalCounted+onlineCollected;
+  const totalExpected=expected+officeEntryAmt+otherBillsTotal;
+  const diff=grandTotal-totalExpected;
+  const status=diff>0?'Excess':(diff<0?'Shortage':'Matched');
+
+  return {
+    Date:date,
+    'Delivery Boys':boys.join(', '),
+    'Assigned Orders':assigned,
+    'Online Bills':online,
+    'Cash Orders':cashOrders,
+    'Rate':rate,
+    'Office Entry Bills (Cylinders)':officeEntry,
+    'Office Entry Amount':officeEntryAmt,
+    'Other Bills':otherBillsList.join(' | '),
+    'Other Bills Total':otherBillsTotal,
+    'Expected Cash (Cylinders)':expected,
+    'Total Expected':totalExpected,
+    'Note x500':notes['500'],
+    'Note x200':notes['200'],
+    'Note x100':notes['100'],
+    'Note x50':notes['50'],
+    'Note x20':notes['20'],
+    'Note x10':notes['10'],
+    'Cash Counted':totalCounted,
+    'Online Collected':onlineCollected,
+    'Grand Total':grandTotal,
+    'Difference':diff,
+    'Status':status
+  };
+}
+
+async function syncToSheet(){
+  const statusEl=document.getElementById('saveStatus');
+  statusEl.textContent='⏳ Syncing to Google Sheet…';
+  const row=buildRowData();
+  try{
+    const res=await fetch(WEB_APP_URL,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({action:'cashEntry',data:row})
+    });
+    const json=await res.json();
+    if(json.ok){
+      statusEl.textContent='✅ Synced to Google Sheet at '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+    } else {
+      statusEl.textContent='⚠️ Sheet said: '+(json.error||'Unknown error');
+    }
+  }catch(err){
+    statusEl.textContent='⚠️ Sync failed — check connection. ('+err.message+')';
+  }
+}
+
+async function saveToExcel(){
+  const statusEl=document.getElementById('saveStatus');
+  const newRow=buildRowData();
+  try{
+    if(!fileHandle){
+      if(!window.showSaveFilePicker){ downloadFresh(newRow); return; }
+      fileHandle=await window.showSaveFilePicker({
+        suggestedName:'BRK_CashCount_Log.xlsx',
+        types:[{description:'Excel File',accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx']}}]
+      });
+    }
+    let rows=[];
+    try{
+      const file=await fileHandle.getFile();
+      if(file.size>0){
+        const buf=await file.arrayBuffer();
+        const wb=XLSX.read(buf,{type:'array'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        rows=XLSX.utils.sheet_to_json(ws);
+      }
+    }catch(e){}
+    const idx=rows.findIndex(r=>r.Date===newRow.Date);
+    if(idx>=0) rows[idx]=newRow; else rows.push(newRow);
+    rows.sort((a,b)=>(a.Date>b.Date?1:-1));
+    const ws=XLSX.utils.json_to_sheet(rows);
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'Cash Log');
+    const out=XLSX.write(wb,{type:'array',bookType:'xlsx'});
+    const writable=await fileHandle.createWritable();
+    await writable.write(out); await writable.close();
+    statusEl.textContent='✅ Saved to '+fileHandle.name+' ('+rows.length+' day(s) recorded)';
+  }catch(err){
+    if(err.name==='AbortError'){ statusEl.textContent='Save cancelled.'; }
+    else { statusEl.textContent='⚠️ '+err.message+' — falling back to download.'; downloadFresh(newRow); }
+  }
+}
+
+function downloadFresh(newRow){
+  const ws=XLSX.utils.json_to_sheet([newRow]);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Cash Log');
+  XLSX.writeFile(wb,`BRK_CashCount_${newRow.Date}.xlsx`);
+  document.getElementById('saveStatus').textContent='⬇️ Downloaded. Use Chrome/Edge for auto-update to single file.';
+}
+
+document.querySelectorAll('#cashView input').forEach(input=>{ input.addEventListener('input',calculate); });
+document.getElementById('entryDate').valueAsDate=new Date();
+addDeliveryRow(); calculate();
+</script>
+</body>
+</html>    background:var(--bg);color:var(--text);font-family:var(--font-body);min-height:100vh;
   }
   #attendanceView .wrap{max-width:480px;margin:0 auto;display:flex;flex-direction:column;}
   #attendanceView header{
