@@ -1,40 +1,879 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1"/>
 <title>BRK Indane — Office App</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
-  /* =========== SHARED =========== */
-  *{box-sizing:border-box;}
-  html,body{margin:0;-webkit-tap-highlight-color:transparent;}
-  .view{display:none;}
-  .view.active{display:block;}
-  nav.app-switch{
-    display:flex;
-    background:#0E2A47;
-    position:sticky;top:0;z-index:50;
-  }
-  nav.app-switch button{
-    flex:1;padding:14px 4px;border:none;background:transparent;
-    color:#9FB4C6;font-family:'Oswald',sans-serif;font-weight:600;
-    font-size:12px;letter-spacing:0.5px;text-transform:uppercase;
-    cursor:pointer;border-bottom:3px solid transparent;
-  }
-  nav.app-switch button.active{color:#fff;border-bottom-color:#FF6B1A;}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{-webkit-tap-highlight-color:transparent;font-family:'Inter',sans-serif;}
+.view{display:none;}.view.active{display:block;}
 
-  /* =========== ATTENDANCE =========== */
-  #attendanceView{
-    --navy:#0E2A47;--steel:#4C6B82;--bg:#EEF1F3;--card:#FFFFFF;
-    --border:#D7DEE3;--flame:#FF6B1A;--flame-deep:#E8401C;
-    --gas-blue:#1B6FA8;--success:#2E9E5B;--text:#1B2730;--text-muted:#5B6B76;
-    --font-display:'Oswald',sans-serif;--font-body:'Inter',sans-serif;
-    --font-mono:'IBM Plex Mono',monospace;
+/* NAV */
+nav{display:flex;background:#0E2A47;position:sticky;top:0;z-index:100;}
+nav button{
+  flex:1;padding:13px 4px;border:none;background:transparent;
+  color:#9FB4C6;font-family:'Oswald',sans-serif;font-weight:600;
+  font-size:11.5px;letter-spacing:0.5px;text-transform:uppercase;
+  cursor:pointer;border-bottom:3px solid transparent;transition:color .15s;
+}
+nav button.active{color:#fff;border-bottom-color:#FF6B1A;}
+
+/* ====== ATTENDANCE ====== */
+#aView{background:#EEF1F3;min-height:100vh;}
+#aView .wrap{max-width:480px;margin:0 auto;}
+#aView header{
+  background:#0E2A47;color:#fff;padding:16px 20px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.brand-name{font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;text-transform:uppercase;}
+.brand-sub{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#9FB4C6;margin-top:2px;}
+.clock-time{font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600;text-align:right;}
+.clock-date{font-family:'IBM Plex Mono',monospace;font-size:10px;color:#9FB4C6;text-align:right;margin-top:2px;}
+
+#aView main{padding:14px;display:flex;flex-direction:column;gap:12px;}
+.card{background:#fff;border:1px solid #D7DEE3;border-radius:14px;padding:16px;}
+.card-title{font-family:'Oswald',sans-serif;font-size:13px;text-transform:uppercase;letter-spacing:1px;color:#4C6B82;margin-bottom:12px;}
+
+/* ── SCANNER VIEWPORT ── */
+#scanBox{
+  position:relative;width:100%;aspect-ratio:1/1;
+  background:#000;border-radius:12px;overflow:hidden;
+}
+#scanVideo{
+  position:absolute;inset:0;width:100%;height:100%;
+  object-fit:cover;
+}
+/* Laser line animation */
+#laser{
+  position:absolute;left:12%;right:12%;height:2px;
+  background:linear-gradient(90deg,transparent,#FF6B1A,#FF6B1A,transparent);
+  box-shadow:0 0 8px 2px rgba(255,107,26,0.7);
+  top:20%;animation:sweep 1.8s ease-in-out infinite;
+  pointer-events:none;z-index:5;
+}
+@keyframes sweep{0%{top:20%;}50%{top:78%;}100%{top:20%;}}
+
+/* Corner brackets */
+#scanBox::before,#scanBox::after,
+#cornerBR::before,#cornerBR::after{
+  content:'';position:absolute;width:28px;height:28px;z-index:6;pointer-events:none;
+}
+#scanBox::before{top:10%;left:10%;border-top:3px solid #FF6B1A;border-left:3px solid #FF6B1A;border-radius:4px 0 0 0;}
+#scanBox::after{top:10%;right:10%;border-top:3px solid #FF6B1A;border-right:3px solid #FF6B1A;border-radius:0 4px 0 0;}
+#cornerBR{position:absolute;inset:0;pointer-events:none;z-index:6;}
+#cornerBR::before{bottom:10%;left:10%;border-bottom:3px solid #FF6B1A;border-left:3px solid #FF6B1A;border-radius:0 0 0 4px;}
+#cornerBR::after{bottom:10%;right:10%;border-bottom:3px solid #FF6B1A;border-right:3px solid #FF6B1A;border-radius:0 0 4px 0;}
+
+/* Dim overlay outside scan area */
+.dim-top,.dim-bottom,.dim-left,.dim-right{
+  position:absolute;background:rgba(0,0,0,0.38);z-index:4;pointer-events:none;
+}
+.dim-top{top:0;left:0;right:0;height:10%;}
+.dim-bottom{bottom:0;left:0;right:0;height:10%;}
+.dim-left{top:10%;bottom:10%;left:0;width:10%;}
+.dim-right{top:10%;bottom:10%;right:0;width:10%;}
+
+/* Success flash */
+#successFlash{
+  position:absolute;inset:0;background:rgba(46,158,91,0.92);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:10px;z-index:20;opacity:0;pointer-events:none;transition:opacity .15s;
+}
+#successFlash.show{opacity:1;}
+#successFlash svg{width:68px;height:68px;}
+#successFlash p{color:#fff;font-family:'Oswald',sans-serif;font-size:22px;letter-spacing:1px;}
+
+/* Start overlay */
+#startOverlay{
+  position:absolute;inset:0;z-index:15;background:rgba(11,26,38,0.88);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+}
+#startOverlay p{color:#D7E3EC;font-size:13px;text-align:center;padding:0 20px;line-height:1.5;}
+#startBtn{
+  background:#FF6B1A;color:#fff;border:none;
+  padding:14px 32px;border-radius:30px;
+  font-family:'Oswald',sans-serif;font-weight:600;font-size:17px;
+  letter-spacing:0.5px;text-transform:uppercase;cursor:pointer;
+}
+
+/* Camera hint pill */
+#scanStatus{
+  position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,0.55);color:#fff;font-size:11px;
+  padding:5px 12px;border-radius:20px;white-space:nowrap;z-index:10;
+  font-family:'Inter',sans-serif;
+}
+
+/* Error bar */
+#camErr{
+  display:none;margin-top:10px;background:#FFF4EC;
+  border:1px solid #FFD3B5;border-radius:10px;
+  padding:12px 14px;font-size:13px;color:#7A3B12;line-height:1.5;
+}
+#camErr input{
+  width:100%;margin-top:8px;padding:9px 12px;
+  border:1px solid #D7DEE3;border-radius:8px;
+  font-family:'IBM Plex Mono',monospace;font-size:14px;
+}
+#camErr button{
+  margin-top:6px;width:100%;padding:10px;border:none;
+  border-radius:8px;background:#4C6B82;color:#fff;
+  font-weight:600;font-size:14px;cursor:pointer;
+}
+
+/* Name buttons */
+.name-row{display:flex;gap:10px;margin-bottom:12px;}
+.name-btn{
+  flex:1;padding:14px 8px;border:2px solid #D7DEE3;border-radius:12px;
+  background:#fff;color:#1B2730;font-family:'Oswald',sans-serif;
+  font-weight:600;font-size:18px;text-transform:uppercase;cursor:pointer;transition:all .15s;
+}
+.name-btn.sel{border-color:#FF6B1A;background:#FF6B1A;color:#fff;}
+.status-txt{font-family:'IBM Plex Mono',monospace;font-size:13px;color:#5B6B76;margin:6px 0 14px;}
+.act-btn{
+  width:100%;min-height:54px;border:none;border-radius:10px;
+  font-family:'Oswald',sans-serif;font-weight:600;font-size:17px;
+  letter-spacing:0.5px;text-transform:uppercase;color:#fff;cursor:pointer;
+}
+.act-btn.ci{background:#FF6B1A;}.act-btn.co{background:#1B6FA8;}
+.act-btn:disabled{background:#C7CFD4;cursor:default;}
+.res{margin-top:10px;font-size:14px;padding:12px 14px;border-radius:10px;}
+.res.ok{background:#EAF7EF;color:#1E6B41;border:1px solid #BCE6CC;}
+.res.err{background:#FDECEA;color:#9A2A1A;border:1px solid #F6C6BD;}
+.next-btn{
+  margin-top:10px;width:100%;padding:12px;
+  border:1px solid #D7DEE3;border-radius:10px;
+  background:#fff;color:#0E2A47;font-weight:600;cursor:pointer;font-size:14px;
+}
+.hidden{display:none!important;}
+
+/* Log table */
+#aView table{width:100%;border-collapse:collapse;font-size:13px;}
+#aView thead th{text-align:left;font-weight:600;color:#5B6B76;text-transform:uppercase;font-size:10.5px;letter-spacing:0.5px;padding:5px 4px;border-bottom:1px solid #D7DEE3;}
+#aView tbody td{padding:8px 4px;border-bottom:1px solid #F0F2F4;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+#aView tbody td.nc{font-family:'Inter',sans-serif;font-weight:500;font-size:13px;}
+.pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;}
+.pill.in{background:#FFF1E6;color:#E8401C;border:1px solid #FFD3B5;}
+.pill.out{background:#E8F5EC;color:#2E9E5B;border:1px solid #BCE6CC;}
+.empty-log{font-size:13px;color:#5B6B76;text-align:center;padding:14px 0;}
+.log-ts{font-size:11px;color:#5B6B76;margin-top:8px;font-family:'IBM Plex Mono',monospace;text-align:right;}
+
+/* ====== QR VIEW ====== */
+#qrView{background:#EEF1F3;min-height:100vh;}
+#qrView .qw{max-width:420px;margin:0 auto;padding:22px 18px;display:flex;flex-direction:column;align-items:center;gap:18px;}
+.qr-hdr{background:#0E2A47;color:#fff;width:100%;border-radius:14px;padding:18px 22px;text-align:center;}
+.qr-hdr h1{font-family:'Oswald',sans-serif;font-size:24px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px;}
+.qr-hdr p{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#9FB4C6;}
+.qr-card{background:#fff;border-radius:18px;padding:24px;box-shadow:0 4px 20px rgba(14,42,71,0.10);display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;}
+.qr-box{background:#fff;padding:14px;border-radius:10px;border:3px solid #0E2A47;}
+.qr-lbl{font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;letter-spacing:3px;color:#0E2A47;text-transform:uppercase;border-top:2px dashed #D7DEE3;padding-top:12px;width:100%;text-align:center;}
+.qr-sub{font-size:12px;color:#5B6B76;text-align:center;line-height:1.5;}
+.qr-instruct{background:#FFF4EC;border:1px solid #FFD3B5;border-radius:10px;padding:12px 14px;width:100%;}
+.qr-instruct h3{font-family:'Oswald',sans-serif;font-size:13px;text-transform:uppercase;letter-spacing:0.5px;color:#FF6B1A;margin-bottom:6px;}
+.qr-instruct ol{padding-left:16px;font-size:13px;color:#5B2D0A;line-height:1.8;}
+.pbtn{width:100%;padding:15px;border:none;border-radius:12px;background:#FF6B1A;color:#fff;font-family:'Oswald',sans-serif;font-weight:700;font-size:17px;letter-spacing:0.5px;text-transform:uppercase;cursor:pointer;box-shadow:0 4px 12px rgba(255,107,26,.3);}
+.dbtn{width:100%;padding:13px;border:2px solid #0E2A47;border-radius:12px;background:#fff;color:#0E2A47;font-family:'Oswald',sans-serif;font-weight:700;font-size:15px;text-transform:uppercase;cursor:pointer;}
+@media print{
+  nav,#aView,#cashView,.pbtn,.dbtn,.qr-instruct,.qr-sub{display:none!important;}
+  #qrView{background:#fff!important;}
+  .qr-hdr{background:#0E2A47!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .qr-card{box-shadow:none;border:1px solid #ccc;}
+}
+
+/* ====== CASH COUNT ====== */
+#cashView,#cashView *{font-family:'Segoe UI',Arial,sans-serif;}
+#cashView{padding:16px;background:linear-gradient(135deg,#e0f7fa,#fff3e0);min-height:100vh;}
+#cashView .con{max-width:480px;margin:0 auto;}
+#cashView h1{text-align:center;color:#d84315;font-size:22px;margin-bottom:4px;}
+#cashView h2.sub{text-align:center;color:#558b2f;font-size:14px;margin-top:0;margin-bottom:16px;font-weight:normal;}
+#cashView .cc{background:#fff;border-radius:12px;padding:14px 16px;margin-bottom:14px;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
+#cashView .cc h3{margin:0 0 10px;font-size:15px;color:#1565c0;border-bottom:1px solid #eee;padding-bottom:6px;display:flex;justify-content:space-between;align-items:center;}
+#cashView .row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+#cashView .row label{font-size:14px;flex:1;}
+#cashView .row input{width:110px;padding:6px 8px;font-size:14px;border:1px solid #ccc;border-radius:6px;text-align:right;}
+#cashView .nr{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+#cashView .nl{background:#ffe0b2;border-radius:6px;padding:6px 10px;font-weight:bold;width:60px;text-align:center;font-size:14px;}
+#cashView .nr input{width:70px;padding:6px;text-align:center;border:1px solid #ccc;border-radius:6px;font-size:14px;}
+#cashView .ntot{flex:1;text-align:right;font-size:14px;color:#555;}
+#cashView .sr{display:flex;justify-content:space-between;margin-bottom:6px;font-size:14px;}
+#cashView .sr.tot{font-weight:bold;font-size:17px;border-top:1px solid #ddd;padding-top:8px;margin-top:6px;}
+#cashView .sr.diff{font-weight:bold;font-size:18px;padding:10px;border-radius:8px;text-align:center;margin-top:8px;}
+#cashView .pos{background:#c8e6c9;color:#2e7d32;}
+#cashView .neg{background:#ffcdd2;color:#c62828;}
+#cashView .zero{background:#dcedc8;color:#33691e;}
+#cashView .or{background:#e8f5e9;border-radius:8px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;}
+#cashView .or label{font-size:14px;color:#2e7d32;font-weight:600;}
+#cashView .or input{width:110px;padding:6px 8px;font-size:14px;border:1px solid #a5d6a7;border-radius:6px;text-align:right;background:#f1f8e9;}
+#cashView button.rst{width:100%;padding:10px;background:#d84315;color:#fff;border:none;border-radius:8px;font-size:15px;margin-top:6px;cursor:pointer;}
+#cashView button.exp{width:100%;padding:12px;background:#2e7d32;color:#fff;border:none;border-radius:8px;font-size:16px;margin-top:10px;cursor:pointer;font-weight:bold;}
+#cashView button.syn{width:100%;padding:12px;background:#1565c0;color:#fff;border:none;border-radius:8px;font-size:16px;margin-top:8px;cursor:pointer;font-weight:bold;}
+#cashView .sm{padding:4px 10px;font-size:13px;border:none;border-radius:6px;cursor:pointer;color:#fff;}
+#cashView .ab{background:#1565c0;}.cashView .db2{background:#c62828;}
+#cashView .er{display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap;}
+#cashView .er input{padding:6px;font-size:13px;border:1px solid #ccc;border-radius:6px;}
+#cashView .er .ni{flex:1;}
+#cashView .obr{display:flex;gap:6px;align-items:center;margin-bottom:8px;}
+#cashView .obr .bl{flex:1;padding:6px 8px;font-size:13px;border:1px solid #ccc;border-radius:6px;}
+#cashView .obr .ba{width:100px;padding:6px 8px;font-size:13px;border:1px solid #ccc;border-radius:6px;text-align:right;}
+#cashView .st{text-align:center;font-size:12px;color:#777;margin-top:6px;}
+</style>
+</head>
+<body>
+
+<nav>
+  <button data-v="aView" class="active">📋 Attendance</button>
+  <button data-v="cashView">💵 Cash Count</button>
+  <button data-v="qrView">🔲 QR Code</button>
+</nav>
+
+<!-- ============ ATTENDANCE ============ -->
+<div id="aView" class="view active">
+<div class="wrap">
+  <header>
+    <div>
+      <div class="brand-name">BRK Indane</div>
+      <div class="brand-sub">Office Attendance</div>
+    </div>
+    <div>
+      <div class="clock-time" id="clkT">--:--:--</div>
+      <div class="clock-date" id="clkD">-- --- ----</div>
+    </div>
+  </header>
+  <main>
+
+    <!-- SCAN CARD -->
+    <div class="card" id="scanCard">
+      <div class="card-title">Scan Office QR Code</div>
+
+      <div id="scanBox">
+        <video id="scanVideo" muted playsinline autoplay></video>
+        <div id="laser"></div>
+        <div id="cornerBR"></div>
+        <div class="dim-top"></div><div class="dim-bottom"></div>
+        <div class="dim-left"></div><div class="dim-right"></div>
+        <div id="scanStatus">Initialising…</div>
+
+        <!-- Start overlay (shown until camera permission granted) -->
+        <div id="startOverlay">
+          <p>Camera access needed to scan the QR code</p>
+          <button id="startBtn">📷 Start Camera</button>
+        </div>
+
+        <!-- Success flash -->
+        <div id="successFlash">
+          <svg viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="11" fill="#2E9E5B"/>
+            <path d="M7 12.5l3.2 3.2L17 9" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <p>VERIFIED ✓</p>
+        </div>
+      </div>
+
+      <div id="camErr">
+        <span id="camErrTxt"></span>
+        <input type="text" id="manualIn" placeholder="Type: BRK INDANE"/>
+        <button onclick="manualCheck()">Submit</button>
+      </div>
+    </div>
+
+    <!-- EMPLOYEE CARD -->
+    <div class="card hidden" id="empCard">
+      <div class="card-title">Who are you?</div>
+      <div class="name-row">
+        <button class="name-btn" onclick="pickName('Navya',this)">👩 Navya</button>
+        <button class="name-btn" onclick="pickName('Shiva',this)">👨 Shiva</button>
+      </div>
+      <div class="status-txt" id="stTxt"></div>
+      <button class="act-btn hidden" id="actBtn"></button>
+      <div class="res hidden" id="resMsg"></div>
+      <button class="next-btn hidden" id="nextBtn">🔁 Scan next person</button>
+    </div>
+
+    <!-- LOG -->
+    <div class="card">
+      <div class="card-title">Today's Attendance</div>
+      <div id="logWrap"><div class="empty-log">Loading…</div></div>
+      <div class="log-ts hidden" id="logTs"></div>
+    </div>
+
+  </main>
+</div>
+</div>
+
+<!-- ============ QR CODE ============ -->
+<div id="qrView" class="view">
+<div class="qw">
+  <div class="qr-hdr"><h1>🔥 BRK Indane</h1><p>Office Attendance QR Code</p></div>
+  <div class="qr-card">
+    <div class="qr-box"><div id="qrcode"></div></div>
+    <div class="qr-lbl">BRK INDANE</div>
+    <p class="qr-sub">Print and stick at office entrance.<br>Staff scan daily to mark attendance.</p>
+  </div>
+  <div class="qr-instruct">
+    <h3>📌 Setup Instructions</h3>
+    <ol>
+      <li>Download or Print the QR code below</li>
+      <li>Print on A4, minimum <strong>8×8 cm</strong> size</li>
+      <li>Laminate &amp; stick at office entrance</li>
+      <li>Staff open app → tap Attendance → scan</li>
+    </ol>
+  </div>
+  <button class="pbtn" onclick="window.print()">🖨️ Print QR Code</button>
+  <button class="dbtn" onclick="dlQR()" style="margin-top:10px;">⬇️ Download PNG</button>
+</div>
+</div>
+
+<!-- ============ CASH COUNT ============ -->
+<div id="cashView" class="view">
+<div class="con">
+  <h1>🔥 BRK Indane Gas Office</h1>
+  <h2 class="sub">Daily Cash Count Sheet</h2>
+  <div class="cc"><div class="row"><label>📅 Date</label><input type="date" id="eDate"></div></div>
+  <div class="cc">
+    <h3>🛵 Delivery Boys <button class="sm ab" onclick="addDR()">+ Add</button></h3>
+    <div id="dRows"></div>
+  </div>
+  <div class="cc">
+    <h3>📦 Orders & Bills</h3>
+    <div class="row"><label>Assigned Orders (Cylinders)</label><input type="number" id="aOrd" min="0" value="0"></div>
+    <div class="row"><label>Online Bill Entry (Cylinders)</label><input type="number" id="oOrd" min="0" value="0"></div>
+    <div class="row"><label>Cash Orders (auto)</label><input type="number" id="cOrd" value="0" disabled style="background:#f1f8e9;"></div>
+    <div class="row"><label>Rate per Cylinder (₹)</label><input type="number" id="rate" value="994"></div>
+    <hr style="margin:8px 0;border:none;border-top:1px solid #eee;">
+    <div class="row" style="font-weight:600;color:#e65100;"><label>🏢 Office Entry Bills (Cyl.)</label><input type="number" id="oeBills" min="0" value="0"></div>
+    <div class="row" style="font-size:12px;color:#888;margin-top:-4px;"><label>↳ Amount (auto)</label><span id="oeAmt" style="font-weight:600;color:#e65100;">₹0</span></div>
+    <hr style="margin:8px 0;border:none;border-top:1px solid #eee;">
+    <div style="margin-bottom:6px;font-weight:600;color:#6a1b9a;font-size:14px;">📝 Other Bills</div>
+    <div id="oBillRows"></div>
+    <button class="sm" style="background:#6a1b9a;margin-bottom:8px;" onclick="addOBR()">+ Add Other Bill</button>
+    <div class="sr tot"><span>📊 Expected Cash</span><span id="expC">₹0</span></div>
+  </div>
+  <div class="cc">
+    <h3>💵 Cash Notes</h3>
+    <div class="nr"><div class="nl">₹500</div><span>×</span><input type="number" min="0" class="nc" data-v="500" value="0"><div class="ntot" data-t="500">= ₹0</div></div>
+    <div class="nr"><div class="nl">₹200</div><span>×</span><input type="number" min="0" class="nc" data-v="200" value="0"><div class="ntot" data-t="200">= ₹0</div></div>
+    <div class="nr"><div class="nl">₹100</div><span>×</span><input type="number" min="0" class="nc" data-v="100" value="0"><div class="ntot" data-t="100">= ₹0</div></div>
+    <div class="nr"><div class="nl">₹50</div><span>×</span><input type="number" min="0" class="nc" data-v="50" value="0"><div class="ntot" data-t="50">= ₹0</div></div>
+    <div class="nr"><div class="nl">₹20</div><span>×</span><input type="number" min="0" class="nc" data-v="20" value="0"><div class="ntot" data-t="20">= ₹0</div></div>
+    <div class="nr"><div class="nl">₹10</div><span>×</span><input type="number" min="0" class="nc" data-v="10" value="0"><div class="ntot" data-t="10">= ₹0</div></div>
+    <div class="sr tot" style="margin-top:10px;"><span>💰 Cash Counted</span><span id="totC">₹0</span></div>
+  </div>
+  <div class="cc">
+    <h3>📲 Online Payment</h3>
+    <div class="or"><label>Online Amount (₹)</label><input type="number" id="onC" min="0" value="0"></div>
+    <div class="sr" style="font-size:13px;color:#555;"><span>Cash + Online</span><span id="gTot" style="font-weight:700;">₹0</span></div>
+  </div>
+  <div class="cc">
+    <h3>📊 Summary</h3>
+    <div class="sr"><span>Cash Counted</span><span id="cCS">₹0</span></div>
+    <div class="sr"><span>Online Collected</span><span id="oCS">₹0</span></div>
+    <div class="sr tot"><span>Total Collected</span><span id="gTS">₹0</span></div>
+    <div class="sr"><span>Expected (Cylinders)</span><span id="eC2">₹0</span></div>
+    <div class="sr"><span>Office Entry Bills</span><span id="oeS">₹0</span></div>
+    <div class="sr"><span>Other Bills</span><span id="obS">₹0</span></div>
+    <div class="sr diff" id="diffRow"><span id="diffVal">₹0</span></div>
+  </div>
+  <button class="rst" onclick="resetAll()">🔄 Reset All</button>
+  <button class="syn" onclick="syncSheet()">☁️ Sync to Google Sheet</button>
+  <button class="exp" onclick="saveXL()">💾 Save to Excel</button>
+  <div class="st" id="saveSt"></div>
+</div>
+</div>
+
+<!-- ===================================================== SCRIPTS -->
+<script>
+/* ---- Nav ---- */
+document.querySelectorAll('nav button').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    const vId = b.dataset.v;
+    document.getElementById(vId).classList.add('active');
+    if(vId==='aView') ensureScanner();
+    else stopScanner();
+  });
+});
+
+/* ---- Clock ---- */
+function tickClock(){
+  const n=new Date();
+  document.getElementById('clkT').textContent=n.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  document.getElementById('clkD').textContent=n.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+}
+tickClock();setInterval(tickClock,1000);
+</script>
+
+<script>
+/* ============================================================
+   PAYMENT-GRADE QR SCANNER
+   Priority chain:
+   1. Native BarcodeDetector API  (Chrome Android ≥83 — hardware accelerated, <10ms/frame)
+   2. jsQR fallback               (pure JS, works everywhere)
+   ============================================================ */
+
+const VALID = "BRK INDANE";
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwnmv6VS8AkDTxk8q0Fp_jAiXx6annH1xXJLfVFE_LmfHl-_WueWB4zHVesJHNknAth1A/exec";
+
+let stream       = null;
+let rafId        = null;
+let scannerLive  = false;
+let lastHit      = 0;
+let barcodeDetector = null;
+
+/* Canvas for jsQR fallback */
+const offCanvas = document.createElement('canvas');
+const offCtx    = offCanvas.getContext('2d', {willReadFrequently:true});
+
+const video      = document.getElementById('scanVideo');
+const statusEl   = document.getElementById('scanStatus');
+const startOv    = document.getElementById('startOverlay');
+const successFlash = document.getElementById('successFlash');
+const camErrDiv  = document.getElementById('camErr');
+const camErrTxt  = document.getElementById('camErrTxt');
+
+/* Load jsQR lazily as fallback */
+let jsQRLoaded = false;
+function loadJsQR(){
+  return new Promise(res=>{
+    if(jsQRLoaded||window.jsQR){jsQRLoaded=true;res();return;}
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.js';
+    s.onload=()=>{jsQRLoaded=true;res();};
+    document.head.appendChild(s);
+  });
+}
+
+/* ── Start camera ── */
+async function startCamera(){
+  camErrDiv.style.display='none';
+  statusEl.textContent='Opening camera…';
+
+  if(!navigator.mediaDevices?.getUserMedia){
+    showErr('Camera API not available. Use Chrome on Android/desktop.');
+    return;
+  }
+
+  // Aggressive camera constraints for fast autofocus
+  const constraints = {
+    video:{
+      facingMode:{ideal:'environment'},
+      width:{ideal:1920},
+      height:{ideal:1920},
+      focusMode:{ideal:'continuous'},      // key: keep focus tracking
+      exposureMode:{ideal:'continuous'},
+      whiteBalanceMode:{ideal:'continuous'}
+    },
+    audio:false
+  };
+
+  try{
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+  }catch(e){
+    // Retry with minimal constraints if advanced ones rejected
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false});
+    }catch(e2){
+      let msg = 'Camera error: ';
+      if(e2.name==='NotAllowedError') msg += 'Allow camera permission and reload.';
+      else if(e2.name==='NotFoundError') msg += 'No camera found.';
+      else msg += e2.message;
+      showErr(msg);
+      return;
+    }
+  }
+
+  video.srcObject = stream;
+  await new Promise(res=>{ video.onloadedmetadata=res; });
+  video.play();
+
+  /* Try to apply zoom=2 for closer view if supported */
+  try{
+    const track = stream.getVideoTracks()[0];
+    const caps  = track.getCapabilities();
+    const settings = {};
+    if(caps.zoom && caps.zoom.max >= 2) settings.zoom = Math.min(2, caps.zoom.max);
+    if(Object.keys(settings).length) await track.applyConstraints({advanced:[settings]});
+  }catch(e){}
+
+  /* Torch button if available */
+  try{
+    const track = stream.getVideoTracks()[0];
+    const caps  = track.getCapabilities();
+    if(caps.torch){
+      const tb = document.createElement('button');
+      tb.textContent='🔦';
+      tb.style.cssText='position:absolute;top:8px;right:8px;z-index:20;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:50%;width:36px;height:36px;font-size:16px;cursor:pointer;';
+      let ton=false;
+      tb.onclick=async()=>{ ton=!ton; await track.applyConstraints({advanced:[{torch:ton}]}); tb.style.background=ton?'rgba(255,200,0,.7)':'rgba(0,0,0,.5)'; };
+      document.getElementById('scanBox').appendChild(tb);
+    }
+  }catch(e){}
+
+  /* Prefer native BarcodeDetector */
+  if('BarcodeDetector' in window){
+    try{
+      const formats = await BarcodeDetector.getSupportedFormats();
+      if(formats.includes('qr_code')){
+        barcodeDetector = new BarcodeDetector({formats:['qr_code']});
+        statusEl.textContent='⚡ Native scanner ready';
+      }
+    }catch(e){ barcodeDetector=null; }
+  }
+
+  /* Load jsQR fallback in parallel (so it's ready instantly if needed) */
+  loadJsQR();
+
+  startOv.style.display='none';
+  scannerLive=true;
+  loop();
+  statusEl.textContent = barcodeDetector ? '⚡ Point at QR code' : '📷 Point at QR code';
+}
+
+/* ── Main scan loop at 60fps via rAF ── */
+async function loop(){
+  if(!scannerLive) return;
+  if(video.readyState === video.HAVE_ENOUGH_DATA){
+    const vw=video.videoWidth, vh=video.videoHeight;
+    if(vw>0 && vh>0){
+      let result = null;
+
+      if(barcodeDetector){
+        /* Native: feed VideoFrame directly — no canvas needed */
+        try{
+          const codes = await barcodeDetector.detect(video);
+          if(codes.length) result = codes[0].rawValue;
+        }catch(e){ barcodeDetector=null; } // demote to jsQR on error
+      }
+
+      if(!result && window.jsQR){
+        /* jsQR fallback */
+        offCanvas.width=vw; offCanvas.height=vh;
+        offCtx.drawImage(video,0,0,vw,vh);
+        const id = offCtx.getImageData(0,0,vw,vh);
+        const code = jsQR(id.data,vw,vh,{inversionAttempts:'attemptBoth'});
+        if(code) result = code.data;
+      }
+
+      if(result) handleResult(result);
+    }
+  }
+  rafId = requestAnimationFrame(loop);
+}
+
+/* ── Handle decoded value ── */
+function handleResult(text){
+  const now=Date.now();
+  if(now-lastHit < 1200) return;   // 1.2s debounce
+  lastHit=now;
+
+  const clean=text.trim().toUpperCase();
+  if(clean===VALID){
+    stopScanner();
+    // Green flash
+    successFlash.classList.add('show');
+    setTimeout(()=>{
+      successFlash.classList.remove('show');
+      showEmpCard();
+    }, 700);
+  } else {
+    statusEl.textContent='❌ Wrong QR — keep on BRK Indane code';
+    setTimeout(()=>{ statusEl.textContent = barcodeDetector?'⚡ Point at QR code':'📷 Point at QR code'; },1800);
+  }
+}
+
+function stopScanner(){
+  scannerLive=false;
+  if(rafId){ cancelAnimationFrame(rafId); rafId=null; }
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+}
+
+function ensureScanner(){
+  if(!scannerLive && !document.getElementById('scanCard').classList.contains('hidden')){
+    // reset UI
+    successFlash.classList.remove('show');
+    startOv.style.display='flex';
+    camErrDiv.style.display='none';
+    statusEl.textContent='Initialising…';
+    startCamera();
+  }
+}
+
+function showErr(msg){
+  camErrDiv.style.display='block';
+  camErrTxt.textContent=msg+' — or type the code manually:';
+}
+
+/* Manual fallback */
+function manualCheck(){
+  const v=document.getElementById('manualIn').value||'';
+  if(v.trim().toUpperCase()===VALID) showEmpCard();
+  else document.getElementById('manualIn').style.borderColor='#E8401C';
+}
+
+document.getElementById('startBtn').addEventListener('click', startCamera);
+// Auto-start on first load
+window.addEventListener('load',()=>setTimeout(startCamera,300));
+</script>
+
+<script>
+/* ---- Employee card ---- */
+async function apiGet(p){ const r=await fetch(WEB_APP_URL+'?'+new URLSearchParams(p)); if(!r.ok)throw 0; return r.json(); }
+async function apiPost(p){ const r=await fetch(WEB_APP_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(p)}); if(!r.ok)throw 0; return r.json(); }
+
+function showEmpCard(){
+  document.getElementById('scanCard').classList.add('hidden');
+  const ec=document.getElementById('empCard');
+  ec.classList.remove('hidden');
+  document.getElementById('resMsg').classList.add('hidden');
+  document.getElementById('nextBtn').classList.add('hidden');
+  document.getElementById('actBtn').classList.add('hidden');
+  document.getElementById('stTxt').textContent='';
+  document.querySelectorAll('.name-btn').forEach(b=>b.classList.remove('sel'));
+}
+
+function pickName(name,btn){
+  document.querySelectorAll('.name-btn').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+  checkSt(name);
+}
+
+async function checkSt(name){
+  const st=document.getElementById('stTxt');
+  const ab=document.getElementById('actBtn');
+  const rm=document.getElementById('resMsg');
+  st.textContent="Checking status…"; ab.classList.add('hidden'); rm.classList.add('hidden');
+  try{
+    const s=await apiGet({action:'status',name});
+    renderBtn(name,s);
+  }catch(e){
+    st.textContent='';
+    rm.textContent="Can't reach sheet. Check connection.";
+    rm.className='res err'; rm.classList.remove('hidden');
+  }
+}
+
+function renderBtn(name,s){
+  const ab=document.getElementById('actBtn');
+  const st=document.getElementById('stTxt');
+  const nb=document.getElementById('nextBtn');
+  if(!s.checkedIn){
+    st.textContent='Not checked in yet.';
+    ab.textContent='✅ Check In'; ab.className='act-btn ci';
+    ab.disabled=false; ab.onclick=()=>doAct(name,'checkin');
+    ab.classList.remove('hidden');
+  } else if(!s.checkedOut){
+    st.textContent='Checked in at '+s.checkInTime;
+    ab.textContent='🚪 Check Out'; ab.className='act-btn co';
+    ab.disabled=false; ab.onclick=()=>doAct(name,'checkout');
+    ab.classList.remove('hidden');
+  } else {
+    st.textContent='Done — In: '+s.checkInTime+' · Out: '+s.checkOutTime;
+    ab.classList.add('hidden'); nb.classList.remove('hidden');
+  }
+}
+
+async function doAct(name,action){
+  const ab=document.getElementById('actBtn');
+  const rm=document.getElementById('resMsg');
+  ab.disabled=true; ab.textContent=action==='checkin'?'Checking in…':'Checking out…';
+  try{
+    const r=await apiPost({name,action});
+    rm.textContent=r.ok?r.message:r.error;
+    rm.className='res '+(r.ok?'ok':'err'); rm.classList.remove('hidden');
+    if(r.status) renderBtn(name,r.status);
+    if(r.ok){ ab.classList.add('hidden'); document.getElementById('nextBtn').classList.remove('hidden'); loadLog(); }
+  }catch(e){
+    rm.textContent="Couldn't reach sheet."; rm.className='res err'; rm.classList.remove('hidden');
+  } finally{ ab.disabled=false; }
+}
+
+document.getElementById('nextBtn').addEventListener('click',()=>{
+  document.getElementById('empCard').classList.add('hidden');
+  document.getElementById('scanCard').classList.remove('hidden');
+  document.querySelectorAll('.name-btn').forEach(b=>b.classList.remove('sel'));
+  startCamera();  // fresh camera start
+});
+
+/* Log */
+async function loadLog(){
+  const w=document.getElementById('logWrap');
+  try{
+    const d=await apiGet({action:'log'});
+    const rows=d.rows||[];
+    if(!rows.length){w.innerHTML='<div class="empty-log">No check-ins yet.</div>';return;}
+    let h='<table><thead><tr><th>Name</th><th>In</th><th>Out</th><th>Status</th></tr></thead><tbody>';
+    rows.forEach(r=>{
+      const pill=r.checkOut?'<span class="pill out">Out</span>':'<span class="pill in">Present</span>';
+      h+=`<tr><td class="nc">${esc(r.name)}</td><td>${esc(r.checkIn||'—')}</td><td>${esc(r.checkOut||'—')}</td><td>${pill}</td></tr>`;
+    });
+    w.innerHTML=h+'</tbody></table>';
+    const ts=document.getElementById('logTs');
+    ts.textContent='Updated '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+    ts.classList.remove('hidden');
+  }catch(e){ w.innerHTML='<div class="empty-log">Couldn\'t load log.</div>'; }
+}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+loadLog(); setInterval(loadLog,20000);
+</script>
+
+<script>
+/* ---- QR Generator ---- */
+(function(){
+  new QRCode(document.getElementById('qrcode'),{
+    text:'BRK INDANE',width:240,height:240,
+    colorDark:'#000',colorLight:'#fff',
+    correctLevel:QRCode.CorrectLevel.H
+  });
+})();
+
+function dlQR(){
+  const cv=document.querySelector('#qrcode canvas');
+  if(!cv){alert('QR not ready');return;}
+  const off=document.createElement('canvas');
+  off.width=320;off.height=380;
+  const c=off.getContext('2d');
+  c.fillStyle='#fff';c.fillRect(0,0,320,380);
+  c.fillStyle='#0E2A47';c.fillRect(0,0,320,56);
+  c.fillStyle='#fff';c.font='bold 20px Arial';c.textAlign='center';
+  c.fillText('BRK INDANE',160,26);
+  c.font='11px Arial';c.fillStyle='#9FB4C6';
+  c.fillText('OFFICE ATTENDANCE QR CODE',160,46);
+  c.drawImage(cv,40,72,240,240);
+  c.fillStyle='#0E2A47';c.font='bold 18px Arial';c.fillText('BRK INDANE',160,342);
+  c.font='12px Arial';c.fillStyle='#5B6B76';c.fillText('Scan to mark attendance',160,366);
+  const a=document.createElement('a');
+  a.download='BRK_INDANE_QR.png';a.href=off.toDataURL('image/png');a.click();
+}
+</script>
+
+<script>
+/* ---- Cash Count ---- */
+let drc=0,obc=0,fh=null;
+function addDR(n=''){
+  drc++;const id='dr'+drc;
+  const d=document.createElement('div');d.className='er';d.id=id;
+  d.innerHTML=`<input type="text" class="ni delN" placeholder="Delivery boy name" value="${n}">
+  <button class="sm" style="background:#c62828;" onclick="document.getElementById('${id}').remove();calc()">✕</button>`;
+  document.getElementById('dRows').appendChild(d);
+}
+function addOBR(){
+  obc++;const id='ob'+obc;
+  const d=document.createElement('div');d.className='obr';d.id=id;
+  d.innerHTML=`<input type="text" class="bl obL" placeholder="Bill type">
+  <input type="number" class="ba obA" placeholder="₹0" min="0" value="0">
+  <button class="sm" style="background:#c62828;" onclick="document.getElementById('${id}').remove();calc()">✕</button>`;
+  document.getElementById('oBillRows').appendChild(d);
+  d.querySelector('.obA').addEventListener('input',calc);
+}
+function calc(){
+  const a=+document.getElementById('aOrd').value||0;
+  const o=+document.getElementById('oOrd').value||0;
+  const r=+document.getElementById('rate').value||0;
+  const oe=+document.getElementById('oeBills').value||0;
+  const onC=+document.getElementById('onC').value||0;
+  const co=Math.max(a-o,0);
+  document.getElementById('cOrd').value=co;
+  const oeA=oe*r;
+  document.getElementById('oeAmt').textContent='₹'+oeA.toLocaleString('en-IN');
+  let obT=0;document.querySelectorAll('.obA').forEach(i=>obT+=(+i.value||0));
+  const exp=co*r;
+  ['expC','eC2'].forEach(id=>document.getElementById(id).textContent='₹'+exp.toLocaleString('en-IN'));
+  document.getElementById('oeS').textContent='₹'+oeA.toLocaleString('en-IN');
+  document.getElementById('obS').textContent='₹'+obT.toLocaleString('en-IN');
+  let tot=0;
+  document.querySelectorAll('.nc').forEach(i=>{
+    const s=(+i.dataset.v)*(+i.value||0);tot+=s;
+    document.querySelector(`.ntot[data-t="${i.dataset.v}"]`).textContent='= ₹'+s.toLocaleString('en-IN');
+  });
+  document.getElementById('totC').textContent='₹'+tot.toLocaleString('en-IN');
+  document.getElementById('cCS').textContent='₹'+tot.toLocaleString('en-IN');
+  const g=tot+onC;
+  document.getElementById('gTot').textContent='₹'+g.toLocaleString('en-IN');
+  document.getElementById('gTS').textContent='₹'+g.toLocaleString('en-IN');
+  document.getElementById('oCS').textContent='₹'+onC.toLocaleString('en-IN');
+  const tExp=exp+oeA+obT;
+  const diff=g-tExp;
+  const dv=document.getElementById('diffVal');
+  const dr=document.getElementById('diffRow');
+  dr.classList.remove('pos','neg','zero');
+  if(diff>0){dv.textContent='Excess ₹'+diff.toLocaleString('en-IN');dr.classList.add('pos');}
+  else if(diff<0){dv.textContent='Shortage ₹'+Math.abs(diff).toLocaleString('en-IN');dr.classList.add('neg');}
+  else{dv.textContent='✅ Cash Matched';dr.classList.add('zero');}
+}
+function resetAll(){
+  document.querySelectorAll('#cashView input').forEach(i=>{
+    if(i.id==='rate')i.value=994;
+    else if(i.id==='eDate'){}
+    else if(!i.disabled&&i.type!=='text')i.value=0;
+  });
+  document.getElementById('dRows').innerHTML='';document.getElementById('oBillRows').innerHTML='';
+  drc=0;obc=0;addDR();calc();
+}
+function buildRow(){
+  const date=document.getElementById('eDate').value||new Date().toISOString().split('T')[0];
+  const a=+document.getElementById('aOrd').value||0,o=+document.getElementById('oOrd').value||0;
+  const co=+document.getElementById('cOrd').value||0,r=+document.getElementById('rate').value||0;
+  const oe=+document.getElementById('oeBills').value||0,oeA=oe*r;
+  const onC=+document.getElementById('onC').value||0,exp=co*r;
+  const boys=[];document.querySelectorAll('#dRows .delN').forEach(i=>{if(i.value.trim())boys.push(i.value.trim());});
+  const obs=[];let obT=0;
+  document.querySelectorAll('.obr').forEach(row=>{
+    const l=row.querySelector('.obL').value.trim()||'Other';
+    const a2=+row.querySelector('.obA').value||0;
+    obs.push(l+': ₹'+a2);obT+=a2;
+  });
+  const notes={};let tot=0;
+  document.querySelectorAll('.nc').forEach(i=>{notes[i.dataset.v]=+i.value||0;tot+=(+i.dataset.v)*(+i.value||0);});
+  const g=tot+onC,tExp=exp+oeA+obT,diff=g-tExp;
+  return{Date:date,'Delivery Boys':boys.join(', '),'Assigned':a,'Online Bills':o,'Cash Orders':co,Rate:r,
+    'Office Entry':oe,'Office Amt':oeA,'Other Bills':obs.join(' | '),'Other Total':obT,
+    'Expected':exp,'Total Expected':tExp,'x500':notes['500'],'x200':notes['200'],'x100':notes['100'],
+    'x50':notes['50'],'x20':notes['20'],'x10':notes['10'],'Cash Counted':tot,
+    'Online':onC,'Grand Total':g,Difference:diff,Status:diff>0?'Excess':diff<0?'Shortage':'Matched'};
+}
+async function syncSheet(){
+  const el=document.getElementById('saveSt');el.textContent='⏳ Syncing…';
+  try{
+    const r=await fetch(WEB_APP_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'cashEntry',data:buildRow()})});
+    const j=await r.json();
+    el.textContent=j.ok?'✅ Synced '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'⚠️ '+(j.error||'Error');
+  }catch(e){el.textContent='⚠️ Failed: '+e.message;}
+}
+async function saveXL(){
+  const el=document.getElementById('saveSt');const row=buildRow();
+  try{
+    if(!fh){
+      if(!window.showSaveFilePicker){dlFresh(row);return;}
+      fh=await window.showSaveFilePicker({suggestedName:'BRK_CashCount_Log.xlsx',types:[{description:'Excel',accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx']}}]});
+    }
+    let rows=[];
+    try{const f=await fh.getFile();if(f.size>0){const b=await f.arrayBuffer();const wb=XLSX.read(b,{type:'array'});rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);}}catch(e){}
+    const idx=rows.findIndex(r=>r.Date===row.Date);
+    if(idx>=0)rows[idx]=row;else rows.push(row);
+    rows.sort((a,b)=>a.Date>b.Date?1:-1);
+    const ws=XLSX.utils.json_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Cash Log');
+    const out=XLSX.write(wb,{type:'array',bookType:'xlsx'});
+    const w=await fh.createWritable();await w.write(out);await w.close();
+    el.textContent='✅ Saved ('+rows.length+' days)';
+  }catch(e){if(e.name==='AbortError'){el.textContent='Cancelled.';}else{el.textContent='⚠️ '+e.message;dlFresh(row);}}
+}
+function dlFresh(row){
+  const ws=XLSX.utils.json_to_sheet([row]);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Cash Log');
+  XLSX.writeFile(wb,`BRK_CashCount_${row.Date}.xlsx`);
+  document.getElementById('saveSt').textContent='⬇️ Downloaded.';
+}
+document.querySelectorAll('#cashView input').forEach(i=>i.addEventListener('input',calc));
+document.getElementById('eDate').valueAsDate=new Date();
+addDR();calc();
+</script>
+</body>
+</html>    --font-mono:'IBM Plex Mono',monospace;
     background:var(--bg);color:var(--text);font-family:var(--font-body);min-height:100vh;
   }
   #attendanceView .wrap{max-width:480px;margin:0 auto;display:flex;flex-direction:column;}
